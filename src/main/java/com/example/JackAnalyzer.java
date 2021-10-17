@@ -1,7 +1,6 @@
 package com.example;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,8 +10,6 @@ public class JackAnalyzer {
 
     public static void main(String... args) throws Exception, IOException {
         Path dir = Paths.get("/Users/jakubsiekiera/Desktop/nand2tetris/projects/10/ArrayTest");
-        
-        // Files.walk(dir).forEach(path -> showFile(path.toFile()));
         Files.walk(dir).forEach(path -> {
             File file = path.toFile();
             if (getFileExtension(file).equals("jack")) {
@@ -27,13 +24,6 @@ public class JackAnalyzer {
             return ""; // empty extension
         }
         return name.substring(lastIndexOf);
-    }
-    public static void showFile(File file) {
-        if (file.isDirectory()) {
-            System.out.println("Directory: " + file.getAbsolutePath());
-        } else {
-            System.out.println("File: " + file.getAbsolutePath());
-        }
     }
     public static void loop(File file) {
         try {
