@@ -12,8 +12,21 @@ import java.util.HashSet;
 import java.util.Set;
 
 
-class JackTokenizer { // TODO write valid XML file
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+
+
+class JackTokenizer {
     private String buffer = "";
+    private File file;
 
     // booleans help buffering specific sequences
     private boolean stringConstant = false; 
@@ -21,6 +34,9 @@ class JackTokenizer { // TODO write valid XML file
     private boolean identifierKeyword = false;
     private boolean comment = false;
 
+    private Document document;
+    private Element rootElement;
+    
     private Set<String> keywords = Collections.unmodifiableSet(
         new HashSet<>(Arrays.asList("class", "constructor", "function", "method", "field", "static",
                                     "var", "int", "char", "boolean", "void", "true", "false", "null", "this",
@@ -33,18 +49,39 @@ class JackTokenizer { // TODO write valid XML file
     // on initialization ignore all comments and whitespace in the input stream, 
     // and serialize it into Jack-language tokens. 
     // The token types are specified according to Jack grammar.
-    public JackTokenizer(File file) throws IOException {        
-        BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), Charset.forName("UTF-8")));
+    public JackTokenizer(File file) throws IOException, TransformerException, ParserConfigurationException {      
+        BufferedReader reader = new BufferedReader(
+            new InputStreamReader(new FileInputStream(file), Charset.forName("UTF-8")));
         int c;
+
+        // copy name of parsed file and 
+        // set extension of written file to.xml
+        int i = file.getName().lastIndexOf('.');
+        String name = file.getName().substring(0,i);
+        this.file = new File(file.getParent(), name + "T1.xml");
+
+        DocumentBuilderFactory documentFactory = DocumentBuilderFactory.newInstance();
+        DocumentBuilder documentBuilder = documentFactory.newDocumentBuilder();
+        document = documentBuilder.newDocument();
+        rootElement = this.document.createElement("tokens");
+        TransformerFactory tf = TransformerFactory.newInstance();
+        tf.setAttribute("indent-number", new Integer(2));
+        Transformer t = tf.newTransformer();
+        
+        // read each character, buffer it and create xml file describing each buffer
         while((c = reader.read()) != -1) {
             Character character = (char) c;
-            advance(character);
+            parseToken(character);
         }
+        rootElement.appendChild(this.document.createTextNode("\n"));
         reader.close();
+
+        // write XML file
+        t.transform(new DOMSource(rootElement), new StreamResult(this.file));
     }
 
-
-    private void advance(Character character) {
+    // serializes token to buffer
+    private void parseToken(Character character) throws TransformerException {
         if (comment == true) {
             if (!character.equals('\n')) { // ignore content of comment
                 return;
@@ -161,8 +198,12 @@ class JackTokenizer { // TODO write valid XML file
         return Character.isLetter(c) || (c == '_');
     }
 
+    private void writeXML(TOKEN_TYPE tp, String buffer) throws TransformerException {
+        // text element
+        rootElement.appendChild(this.document.createTextNode("\n\t"));
 
-    private void writeXML(TOKEN_TYPE tp, String buffer) {
-        System.out.println(tp + " - " + buffer);
+        Element token = document.createElement(tp.toString().toLowerCase());
+        token.appendChild(document.createTextNode(buffer));
+        rootElement.appendChild(token);
     }
 };

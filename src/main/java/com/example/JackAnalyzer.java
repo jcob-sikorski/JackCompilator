@@ -6,14 +6,25 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.TransformerException;
+
 public class JackAnalyzer {
 
     public static void main(String... args) throws Exception, IOException {
-        Path dir = Paths.get("/Users/jakubsiekiera/Desktop/nand2tetris/projects/10/ArrayTest");
+        Path dir = Paths.get("/Users/jakubsiekiera/Desktop/nand2tetris/projects/10/ExpressionLessSquare");
+
+        // parse each file and serialize it to .xml file
         Files.walk(dir).forEach(path -> {
             File file = path.toFile();
             if (getFileExtension(file).equals("jack")) {
-                loop(file);
+                try {
+                    parseFile(file);
+                } catch (TransformerException e) {
+                    e.printStackTrace();
+                } catch (ParserConfigurationException e) {
+                    e.printStackTrace();
+                }
             }
         });
     }
@@ -25,7 +36,7 @@ public class JackAnalyzer {
         }
         return name.substring(lastIndexOf);
     }
-    public static void loop(File file) {
+    public static void parseFile(File file) throws TransformerException, ParserConfigurationException {
         try {
             JackTokenizer tokenizer = new JackTokenizer(file);
         }

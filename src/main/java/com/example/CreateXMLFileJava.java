@@ -13,7 +13,7 @@ import org.w3c.dom.Attr;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
  
-public class CreateXMLFileJava {
+public class CreateXMLFileJava { // exemplary writing to XML
  
     public static final String xmlFilePath = "C:\\Users\\nikos7\\Desktop\\files\\xmlfile.xml";
  
@@ -68,16 +68,16 @@ public class CreateXMLFileJava {
             TransformerFactory transformerFactory = TransformerFactory.newInstance();
             Transformer transformer = transformerFactory.newTransformer();
             DOMSource domSource = new DOMSource(document);
-            StreamResult streamResult = new StreamResult(new File(xmlFilePath));
+            // StreamResult streamResult = new StreamResult(new File(xmlFilePath));
  
             // If you use
-            // StreamResult result = new StreamResult(System.out);
+            StreamResult result = new StreamResult(System.out);
             // the output will be pushed to the standard output ...
             // You can use that for debugging 
  
-            transformer.transform(domSource, streamResult);
+            transformer.transform(domSource, result);
  
-            System.out.println("Done creating XML File");
+            // System.out.println("Done creating XML File");
  
         } catch (ParserConfigurationException pce) {
             pce.printStackTrace();
