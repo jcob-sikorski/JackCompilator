@@ -6,79 +6,55 @@ import java.io.InputStreamReader;
 import java.io.FileInputStream;
 import java.nio.charset.Charset;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-
 
 class JackTokenizer {
     private String buffer = "";
-    private File file;
 
     // booleans help buffering specific sequences
     private boolean stringConstant = false; 
     private boolean integerConstant = false;
     private boolean identifierKeyword = false;
     private boolean comment = false;
-
-    private Document document;
-    private Element rootElement;
     
     private Set<String> keywords = Collections.unmodifiableSet(
         new HashSet<>(Arrays.asList("class", "constructor", "function", "method", "field", "static",
-                                    "var", "int", "char", "boolean", "void", "true", "false", "null", "this",
+                                    "var", "int", "char", "boolean", "void", "true", "false", "return null;", "this",
                                     "let", "do", "if", "else", "while", "return")));
 
     private Set<Character> symbols = Collections.unmodifiableSet(
         new HashSet<>(Arrays.asList('{', '}', '(', ')', '[', ']', '.', ',', ';', '+', '-', '*', '/', '&', '|','<', '>', '=', '~')));
     
+    private ArrayList<Token> tokenArray = new ArrayList<Token>();
 
     // on initialization ignore all comments and whitespace in the input stream, 
     // and serialize it into Jack-language tokens. 
     // The token types are specified according to Jack grammar.
-    public JackTokenizer(File file) throws IOException, TransformerException, ParserConfigurationException {      
+    // returns array containing all serialized tokens
+    public ArrayList<Token> JackTokenizer(File file) throws IOException, TransformerException, ParserConfigurationException {      
         BufferedReader reader = new BufferedReader(
             new InputStreamReader(new FileInputStream(file), Charset.forName("UTF-8")));
         int c;
 
-        // copy name of parsed file and 
-        // set extension of written file to.xml
-        int i = file.getName().lastIndexOf('.');
-        String name = file.getName().substring(0,i);
-        this.file = new File(file.getParent(), name + "T1.xml");
-
-        DocumentBuilderFactory documentFactory = DocumentBuilderFactory.newInstance();
-        DocumentBuilder documentBuilder = documentFactory.newDocumentBuilder();
-        document = documentBuilder.newDocument();
-        rootElement = this.document.createElement("tokens");
-        TransformerFactory tf = TransformerFactory.newInstance();
-        tf.setAttribute("indent-number", new Integer(2));
-        Transformer t = tf.newTransformer();
-        
         // read each character, buffer it and create xml file describing each buffer
         while((c = reader.read()) != -1) {
             Character character = (char) c;
             parseToken(character);
         }
-        rootElement.appendChild(this.document.createTextNode("\n"));
         reader.close();
-
+        
         // write XML file
-        t.transform(new DOMSource(rootElement), new StreamResult(this.file));
+        return tokenArray;
     }
+
 
     // serializes token to buffer
     private void parseToken(Character character) throws TransformerException {
@@ -96,32 +72,31 @@ class JackTokenizer {
             return;
         }
 
-
         if ((int)'\"' == (int)character) { // handle stringConstant
+            
             if (stringConstant == false) { // open stringConsant buffer
                 stringConstant = true;
                 buffer = "";
             }
             else {
-                writeXML(tokenType(buffer), buffer); // close stringConstant buffer
+                tokenArray.add(new Token(tokenType(buffer), buffer));
+
                 stringConstant = false;
                 buffer = "";
             }
-            return;
         }
         if (stringConstant == true) { // add character to stringConstant buffer
             buffer += character;
             return;
         }
 
-
         if (Character.isDigit(character)) { // handle integerConstant
             integerConstant = true; // open integerConstant buffer
             buffer += character;
             return;
         }
-        if (integerConstant == true) {
-            writeXML(tokenType(buffer), buffer); // close integerConstant buffer
+        if (integerConstant == true) { // close integerConstant buffer
+            tokenArray.add(new Token(tokenType(buffer), buffer));
             buffer = "";
             integerConstant = false; 
         }
@@ -129,7 +104,7 @@ class JackTokenizer {
 
         if (character.equals(' ') || character.equals('\n')) { // ignore whitespace and enters
             if (identifierKeyword == true) {
-                writeXML(tokenType(buffer), buffer); // close identifier/keyword buffer
+                tokenArray.add(new Token(tokenType(buffer), buffer));
                 buffer = "";
                 identifierKeyword = false;
             }
@@ -146,22 +121,18 @@ class JackTokenizer {
 
         if (symbols.contains(character)) { // handle symbols
             if (identifierKeyword == true) { // close identifier/keyword buffer
-                writeXML(tokenType(buffer), buffer);
+                tokenArray.add(new Token(tokenType(buffer), buffer));
                 buffer = "";
                 identifierKeyword = false;
             }
             buffer = "";
             String sCharacter = character.toString(); // simultaneously write symbol
-            writeXML(tokenType(sCharacter), sCharacter);
-            return;
+            tokenArray.add(new Token(tokenType(sCharacter), sCharacter));
         }
+        return;
     }
 
-
-    private enum TOKEN_TYPE {
-        KEYWORD, SYMBOL, IDENTIFIER, INT_CONST, STRING_CONST, ERROR
-    }
-
+    
     private TOKEN_TYPE tokenType(String token) { // Returns the type of current token, 
                                                  // as a constant.
         if (keywords.contains(token)) {
@@ -196,14 +167,5 @@ class JackTokenizer {
     private boolean isIdentifier(int intObj) {
         char c = (char)(intObj);
         return Character.isLetter(c) || (c == '_');
-    }
-
-    private void writeXML(TOKEN_TYPE tp, String buffer) throws TransformerException {
-        // text element
-        rootElement.appendChild(this.document.createTextNode("\n\t"));
-
-        Element token = document.createElement(tp.toString().toLowerCase());
-        token.appendChild(document.createTextNode(buffer));
-        rootElement.appendChild(token);
     }
 };
