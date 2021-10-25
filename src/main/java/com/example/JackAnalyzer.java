@@ -10,10 +10,12 @@ import java.util.ArrayList;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
 
+import org.xml.sax.SAXException;
+
 public class JackAnalyzer {
 
     public static void main(String... args) throws Exception, IOException {
-        Path dir = Paths.get("/Users/jakubsiekiera/Desktop/nand2tetris/projects/10/ExpressionLessSquare");
+        Path dir = Paths.get("/Users/jakubsiekiera/Desktop/nand2tetris/projects/10/Square");
 
         // parse each file and serialize it to .xml file
         Files.walk(dir).forEach(path -> {
@@ -24,6 +26,9 @@ public class JackAnalyzer {
                 } catch (TransformerException e) {
                     e.printStackTrace();
                 } catch (ParserConfigurationException e) {
+                    e.printStackTrace();
+                } catch (SAXException e) {
+                    // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
             }
@@ -37,17 +42,19 @@ public class JackAnalyzer {
         }
         return name.substring(lastIndexOf);
     }
-    public static void parseFile(File file) throws TransformerException, ParserConfigurationException {
+    public static void parseFile(File file) throws TransformerException, ParserConfigurationException, SAXException {
         try {
             JackTokenizer tokenizer = new JackTokenizer();
             ArrayList<Token> tokenArray = tokenizer.JackTokenizer(file);
 
-            CompilationEngine compilationEngine = new CompilationEngine(file);
-            
-            for (Token token : tokenArray) {
-                compilationEngine.writeXML(token.tokenType(), token.token());
+            CompilationEngine compilationEngine = new CompilationEngine(tokenArray);
+            ArrayList<LexicalElement> output = compilationEngine.getOutput();
+
+            XMLEngine xmlEngine = new XMLEngine(file);
+
+            for (LexicalElement token: output) {
+                xmlEngine.writeXML(token);
             }
-            compilationEngine.endFile();
         }
         catch(IOException ie) {
             ie.printStackTrace();
