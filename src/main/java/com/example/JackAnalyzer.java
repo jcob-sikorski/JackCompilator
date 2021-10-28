@@ -15,7 +15,7 @@ import org.xml.sax.SAXException;
 public class JackAnalyzer {
 
     public static void main(String... args) throws Exception, IOException {
-        Path dir = Paths.get("/Users/jakubsiekiera/Desktop/nand2tetris/projects/10/Square");
+        Path dir = Paths.get("/Users/jakubsiekiera/Desktop/nand2tetris/projects/10/ArrayTest");
 
         // parse each file and serialize it to .xml file
         Files.walk(dir).forEach(path -> {
@@ -28,7 +28,6 @@ public class JackAnalyzer {
                 } catch (ParserConfigurationException e) {
                     e.printStackTrace();
                 } catch (SAXException e) {
-                    // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
             }
@@ -38,7 +37,7 @@ public class JackAnalyzer {
         String name = file.getName();
         int lastIndexOf = name.lastIndexOf(".") + 1;
         if (lastIndexOf == -1) {
-            return ""; // empty extension
+            return "";
         }
         return name.substring(lastIndexOf);
     }
@@ -47,14 +46,7 @@ public class JackAnalyzer {
             JackTokenizer tokenizer = new JackTokenizer();
             ArrayList<Token> tokenArray = tokenizer.JackTokenizer(file);
 
-            CompilationEngine compilationEngine = new CompilationEngine(tokenArray);
-            ArrayList<LexicalElement> output = compilationEngine.getOutput();
-
-            XMLEngine xmlEngine = new XMLEngine(file);
-
-            for (LexicalElement token: output) {
-                xmlEngine.writeXML(token);
-            }
+            CompilationEngine compilationEngine = new CompilationEngine(file, tokenArray);
         }
         catch(IOException ie) {
             ie.printStackTrace();

@@ -23,7 +23,7 @@ class JackTokenizer {
     private boolean stringConstant = false; 
     private boolean integerConstant = false;
     private boolean identifierKeyword = false;
-    private boolean comment = false;
+    private int comment = 0;
     
     private Set<String> keywords = Collections.unmodifiableSet(
         new HashSet<>(Arrays.asList("class", "constructor", "function", "method", "field", "static",
@@ -58,19 +58,29 @@ class JackTokenizer {
 
     // serializes token to buffer
     private void parseToken(Character character) throws TransformerException {
-        if (comment == true) {
+        if (comment == 2) {
             if (!character.equals('\n')) { // ignore content of comment
                 return;
             }
             else { // singal that it's the end of the comment
-                comment = false;
+                comment = 0;
+                buffer = "";
                 return;
             }
         }
-        if (character.equals('/')) { // signal that comment starts
-            comment = true;
+        if (character.equals('/') ||
+            (character.equals('*') && comment == 1)) { // signal that comment starts
+            comment++;
+            buffer += character;
             return;
         }
+        if (comment == 1) {
+            tokenArray.add(new Token(tokenType(buffer), buffer));
+            comment = 0;
+            buffer = "";
+            return;
+        }
+
 
         if ((int)'\"' == (int)character) { // handle stringConstant
             
