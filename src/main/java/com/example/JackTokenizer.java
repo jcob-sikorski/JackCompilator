@@ -23,7 +23,11 @@ class JackTokenizer {
     private boolean stringConstant = false; 
     private boolean integerConstant = false;
     private boolean identifierKeyword = false;
-    private int comment = 0;
+    private boolean prevDash = false;
+    private boolean comment = false;
+    private boolean dashStar = false;
+    private boolean dashDash = false;
+    private boolean prevStar = false;
     
     private Set<String> keywords = Collections.unmodifiableSet(
         new HashSet<>(Arrays.asList("class", "constructor", "function", "method", "field", "static",
@@ -56,29 +60,68 @@ class JackTokenizer {
     }
 
 
+    private void handleComments(Character character) {
+
+    }
+
+
     // serializes token to buffer
     private void parseToken(Character character) throws TransformerException {
-        if (comment == 2) {
-            if (!character.equals('\n')) { // ignore content of comment
-                return;
-            }
-            else { // singal that it's the end of the comment
-                comment = 0;
-                buffer = "";
-                return;
-            }
-        }
-        if (character.equals('/') ||
-            (character.equals('*') && comment == 1)) { // signal that comment starts
-            comment++;
-            buffer += character;
+        // dashDash stands for "//" comment
+        // dash Star stands for "/*" comment
+
+        // end dashDash
+        if (dashDash && character == '\n') {
+            dashDash = false;
+            prevDash = false;
             return;
         }
-        if (comment == 1) {
-            tokenArray.add(new Token(tokenType(buffer), buffer));
-            comment = 0;
-            buffer = "";
+        // continue dashDash
+        if (dashDash) {
             return;
+        }
+        // start starDash
+        if (prevDash && character == '/') {
+            dashDash = true;
+            prevDash = false;
+            return;
+        }
+        // start starDash
+        if (prevDash && character == '*') {
+            dashStar = true;
+            prevDash = false;
+            return;
+        }
+        // end starDash
+        if (prevStar && character == '/') {
+            dashStar = false;
+            prevStar = false;
+            return;
+        }
+        // singal occurence of '*'
+        if (character == '*') {
+            prevStar = true;
+            return;
+        }
+        // continue starDash
+        if (dashStar) {
+            prevStar = false;
+            return;
+        }
+        // signal occurence of '/'
+        if (character == '/') {
+            prevDash = true;
+            return;
+        }
+        // it was divide symbol!
+        if (prevDash && character != '/') {
+            prevDash = false;
+            tokenArray.add(new Token(tokenType("/"), "/"));
+        }
+        // it was times symbol!
+        if (prevStar && character != '*') {
+            prevStar = false;
+            tokenArray.add(new Token(tokenType("*"), "*"));
         }
 
 

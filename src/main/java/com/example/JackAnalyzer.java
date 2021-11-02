@@ -15,7 +15,7 @@ import org.xml.sax.SAXException;
 public class JackAnalyzer {
 
     public static void main(String... args) throws Exception, IOException {
-        Path dir = Paths.get("/Users/jakubsiekiera/Desktop/nand2tetris/projects/10/ArrayTest");
+        Path dir = Paths.get("/Users/jakubsiekiera/Desktop/nand2tetris/projects/10/Square");
 
         // parse each file and serialize it to .xml file
         Files.walk(dir).forEach(path -> {

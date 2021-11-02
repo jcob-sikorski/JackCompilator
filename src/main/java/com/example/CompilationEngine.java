@@ -35,6 +35,7 @@ class CompilationEngine { // TODO after last child add tab
     private ArrayList<Token> tokenArray;
     private int index = 0;
     private int numberOfTabs = 0;
+    private boolean letStatementBool = false;
 
     private Set<String> op = new HashSet<String>() {{
         add("+"); add("-"); add("*"); add("/"); add("&"); add("|"); add("<"); add(">"); add("="); add("~");
@@ -66,7 +67,8 @@ class CompilationEngine { // TODO after last child add tab
         t.transform(new DOMSource(root), new StreamResult(this.file)); // write XML file
     };
 
-    private void CompileClass(Element root) {
+    private void CompileClass(Element root) { // TODO bug in jackTokenizer can't handle /* and /** comments
+                                              //      debug SquareGame.jack (second interation of CompileClass)
         numberOfTabs++;
         
         addChild(root, index); // class
@@ -99,7 +101,7 @@ class CompilationEngine { // TODO after last child add tab
             index += 3;
 
             while (getToken(index).token().equals(",")) { // (',' varName)*
-                addChild(classVarDec, index); // static | field
+                addChild(classVarDec, index); // ,
                 addChild(classVarDec, index+1); // varName
                 index += 2;
             }
@@ -181,8 +183,8 @@ class CompilationEngine { // TODO after last child add tab
 
         compileStatements(statements);
 
-        // addChild(subroutineBody, index); // }
-        // index += 1;
+        addChild(subroutineBody, index); // } // TODO
+        index += 1;
 
         numberOfTabs--;
     }
@@ -282,7 +284,9 @@ class CompilationEngine { // TODO after last child add tab
         addChild(letStatement, index); // =
         index += 1;
 
+        letStatementBool = true;
         compileExpression(letStatement);
+        letStatementBool = false;
         addChild(letStatement, index); // ;
         index += 1;
 
@@ -318,7 +322,7 @@ class CompilationEngine { // TODO after last child add tab
 
         numberOfTabs -= 2;
 
-        if (getToken(index).equals("else")) {
+        if (getToken(index).token().equals("else")) {
             addChild(ifStatement, index); // else
             addChild(ifStatement, index+1); // {
             index += 2;
@@ -363,7 +367,8 @@ class CompilationEngine { // TODO after last child add tab
 
         compileStatements(statements1);
 
-        addChild(whileStatement, index); // }
+        addChild(whileStatement, index); // } // TODO
+        // addChild(statements1, index); // } // TODO
         numberOfTabs -= 2;
         index += 1;
     }
@@ -499,23 +504,27 @@ class CompilationEngine { // TODO after last child add tab
             else if (getToken(index+1).token().equals(".")) {
                 numberOfTabs++;
                 
-                addSubroot(root, "term");
-                Element term = getDirectChild(root, "term");
+                Element termRoot = root;
+                if (letStatementBool == true) {
+                    addSubroot(root, "term");                 // 
+                    termRoot = getDirectChild(root, "term");  // it has to add term when let
+                }
 
                 numberOfTabs++;
-
-                addChild(term, index); // className | varName
-                addChild(term, index+1); // .
-                addChild(term, index+2); // subroutineName
-                addChild(term, index+3); // (
+                
+                addChild(termRoot, index); // className | varName
+                addChild(termRoot, index+1); // .
+                addChild(termRoot, index+2); // subroutineName
+                addChild(termRoot, index+3); // (
                 index += 4;
 
                 compileExpressionList(root);
 
-                addChild(root, index); // )
+                addChild(termRoot, index); // )
                 index += 1;
 
                 numberOfTabs -= 2;
+                
             }
             else if (getToken(index+1).token().equals("(")) {
                 addChild(root, index); // subroutineName
@@ -607,7 +616,12 @@ class CompilationEngine { // TODO after last child add tab
     }
 
     private void addSubroot(Element parent, String description) {
-        String tabs = String.format("%0" + numberOfTabs + "d", 0).replace("0", "  ");
+        String tabs = "";
+        try {
+            tabs = String.format("%0" + numberOfTabs + "d", 0).replace("0", "  ");
+        } catch (Exception e) {
+            //TODO: handle exception
+        }
 
         parent.appendChild(this.document.createTextNode("\n"+tabs)); // tokens are childs of root 
                                                                   // so they must be intended
