@@ -1,15 +1,15 @@
 package com.example;
 
 class Token {
-    private TOKEN_TYPE tokenType;
+    private String tokenType;
     private String token;
 
-    public Token(TOKEN_TYPE tokenType, String token) {
+    public Token(String tokenType, String token) {
         this.tokenType = tokenType;
         this.token = token;
     }
 
-    public TOKEN_TYPE tokenType() {
+    public String tokenType() {
         return this.tokenType;
     }
     public String token() {

@@ -1,7 +1,6 @@
 package com.example;
 
 import java.io.IOException;
-import java.rmi.server.ExportException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
@@ -9,10 +8,6 @@ import java.util.Set;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
 import org.xml.sax.SAXException;
-
-// TODO do statement after index 124 is ignored
-// bug in JackTokenizer
-
 import java.io.File;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -26,15 +21,13 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
 
-class CompilationEngine { // TODO after last child add tab
-                          // considered function is intendTagEnd(parent)
+class CompilationEngine {
     private File file;
 
     private Document document;
 
     private ArrayList<Token> tokenArray;
     private int index = 0;
-    private int numberOfTabs = 0;
     private boolean letStatementBool = false;
 
     private Set<String> op = new HashSet<String>() {{
@@ -61,16 +54,10 @@ class CompilationEngine { // TODO after last child add tab
 
         CompileClass(root);
 
-        root.appendChild(this.document.createTextNode("\n")); // add tab to last node so </class> 
-                                                                     // would be on next line
-
         t.transform(new DOMSource(root), new StreamResult(this.file)); // write XML file
     };
 
-    private void CompileClass(Element root) { // TODO bug in jackTokenizer can't handle /* and /** comments
-                                              //      debug SquareGame.jack (second interation of CompileClass)
-        numberOfTabs++;
-        
+    private void CompileClass(Element root) {
         addChild(root, index); // class
         addChild(root, index+1); // className
         addChild(root, index+2); // {
@@ -82,8 +69,6 @@ class CompilationEngine { // TODO after last child add tab
         }
         addChild(root, index); // }
         index += 1;
-
-        numberOfTabs--;
     }
 
 
@@ -93,7 +78,6 @@ class CompilationEngine { // TODO after last child add tab
         {
             addSubroot(root, "classVarDec");
             Element classVarDec = getDirectChild(root, "classVarDec");
-            numberOfTabs++;
             
             addChild(classVarDec, index); // static | field
             addChild(classVarDec, index+1); // type
@@ -107,8 +91,6 @@ class CompilationEngine { // TODO after last child add tab
             }
             addChild(classVarDec, index); // ; // TODO index or index+3?
             index += 1;
-
-            numberOfTabs -= 2;
         }
     }
 
@@ -118,12 +100,9 @@ class CompilationEngine { // TODO after last child add tab
             tokenArray.get(index).token().equals("function") ||
             tokenArray.get(index).token().equals("method")) 
         {
-            numberOfTabs++;
-
             addSubroot(root, "subroutineDec");
             Element subroutineDec = getDirectChild(root, "subroutineDec");
             
-            numberOfTabs++;
 
             addChild(subroutineDec, index); // constructor | function | method
             addChild(subroutineDec, index+1); // 'void' | type
@@ -132,12 +111,11 @@ class CompilationEngine { // TODO after last child add tab
             index += 4;
 
             compileParameterList(subroutineDec);
+
             addChild(subroutineDec, index); // )
             index += 1;
 
             compileSubroutineBody(subroutineDec);
-
-            numberOfTabs -= 2;
         }
     }
 
@@ -147,8 +125,6 @@ class CompilationEngine { // TODO after last child add tab
         Element parameterList = getDirectChild(subroutineDec, "parameterList");
         
         while (!getToken(index).token().equals(")")) {
-            numberOfTabs++;
-
             addChild(parameterList, index); // type
             addChild(parameterList, index+1); // varName
             index += 2;
@@ -160,18 +136,13 @@ class CompilationEngine { // TODO after last child add tab
                 addChild(parameterList, index); // ,
                 index += 1;
             }
-            numberOfTabs--;
         }
-
-        // numberOfTabs -= 2;
     }
 
 
     private void compileSubroutineBody(Element subroutineDec) {
         addSubroot(subroutineDec, "subroutineBody");
         Element subroutineBody = getDirectChild(subroutineDec, "subroutineBody");
-
-        numberOfTabs++;
         
         addChild(subroutineBody, index); // {
         index += 1;
@@ -185,20 +156,15 @@ class CompilationEngine { // TODO after last child add tab
 
         addChild(subroutineBody, index); // } // TODO
         index += 1;
-
-        numberOfTabs--;
     }
 
 
     private void compileVarDec(Element root) { // TODO each new call generates new tag <classVarDec> </classVarDec>
         while (tokenArray.get(index).token().equals("var")) {
         // if (tokenArray.get(index).token().equals("var")) {
-            numberOfTabs++;
 
             addSubroot(root, "varDec");
             Element varDec = getDirectChild(root, "varDec");
-                
-            numberOfTabs++;
                 
             addChild(varDec, index); // var       
             addChild(varDec, index+1); // type    
@@ -215,11 +181,7 @@ class CompilationEngine { // TODO after last child add tab
             }
             addChild(varDec, index); // ;
             index += 1;
-    
-            numberOfTabs -= 2;
-            // compileVarDec(root);
         }
-        // }
     }
 
 
@@ -261,12 +223,8 @@ class CompilationEngine { // TODO after last child add tab
 
 
     private void compileLet(Element statements) {
-        numberOfTabs++;
-
         addSubroot(statements, "letStatement");
         Element letStatement = getDirectChild(statements, "letStatement");
-
-        numberOfTabs++;
 
         addChild(letStatement, index); // let
         addChild(letStatement, index+1); // varName
@@ -289,18 +247,13 @@ class CompilationEngine { // TODO after last child add tab
         letStatementBool = false;
         addChild(letStatement, index); // ;
         index += 1;
-
-        numberOfTabs--;
     }
 
 
     private void compileIf(Element statements) {
-        numberOfTabs++;
 
         addSubroot(statements, "ifStatement");
         Element ifStatement = getDirectChild(statements, "ifStatement");
-        
-        numberOfTabs++;
         
         addChild(ifStatement, index); // if
         addChild(ifStatement, index+1); // (
@@ -320,14 +273,10 @@ class CompilationEngine { // TODO after last child add tab
         addChild(ifStatement, index); // }
         index += 1;
 
-        numberOfTabs -= 2;
-
         if (getToken(index).token().equals("else")) {
             addChild(ifStatement, index); // else
             addChild(ifStatement, index+1); // {
             index += 2;
-
-            numberOfTabs++;
 
             addSubroot(ifStatement, "statements");
             Element statements2 = getDirectChild(ifStatement, "statements");
@@ -336,20 +285,15 @@ class CompilationEngine { // TODO after last child add tab
 
             addChild(ifStatement, index); // }
             index += 1;
-
-            numberOfTabs--;
         }
 
     }
 
 
     private void compileWhile(Element statements) {
-        numberOfTabs++;
 
         addSubroot(statements, "whileStatement");
         Element whileStatement = getDirectChild(statements, "whileStatement");
-
-        numberOfTabs++;
 
         addChild(whileStatement, index); // while
         addChild(whileStatement, index+1); // (
@@ -362,25 +306,19 @@ class CompilationEngine { // TODO after last child add tab
         addChild(whileStatement, index+1); // {
         index += 2;
 
-        addSubroot(statements, "statements");
-        Element statements1 = getDirectChild(statements, "statements");
+        addSubroot(whileStatement, "statements");
+        Element statements1 = getDirectChild(whileStatement, "statements");
 
         compileStatements(statements1);
 
-        addChild(whileStatement, index); // } // TODO
-        // addChild(statements1, index); // } // TODO
-        numberOfTabs -= 2;
+        addChild(whileStatement, index); // }
         index += 1;
     }
 
 
     private void compileDo(Element statements) {
-        numberOfTabs++;
-
         addSubroot(statements, "doStatement");
         Element doStatement = getDirectChild(statements, "doStatement");
-
-        numberOfTabs++;
 
         addChild(doStatement, index); // do
         index += 1;
@@ -390,18 +328,12 @@ class CompilationEngine { // TODO after last child add tab
 
         addChild(doStatement, index); // ;
         index += 1;
-        
-        numberOfTabs--;
     }
 
 
     private void compileReturn(Element statements) {
-        numberOfTabs++;
-
         addSubroot(statements, "returnStatement");
         Element returnStatement = getDirectChild(statements, "returnStatement");
-
-        numberOfTabs++;
 
         addChild(returnStatement, index); // return
         index += 1;
@@ -412,8 +344,6 @@ class CompilationEngine { // TODO after last child add tab
         }
         addChild(returnStatement, index); // ;
         index += 1;
-
-        numberOfTabs--;
     }
 
     private void compileExpression(Element root) {
@@ -428,33 +358,24 @@ class CompilationEngine { // TODO after last child add tab
 
             compileTerm(expression);
         }
-        root.appendChild(this.document.createTextNode("\n"));
     }
 
     private void compileTerm(Element root) {
-        if (getToken(index).tokenType().equals(TOKEN_TYPE.INT_CONST) || 
-            getToken(index).tokenType().equals(TOKEN_TYPE.STRING_CONST) || 
-            getToken(index).tokenType().equals(TOKEN_TYPE.KEYWORD)) 
+        if (getToken(index).tokenType().equals("integerConstant") || 
+            getToken(index).tokenType().equals("stringConstant") || 
+            getToken(index).tokenType().equals("keyword")) 
             {
-            numberOfTabs++;
 
             addSubroot(root, "term");
             Element term = getDirectChild(root, "term");
-            
-            numberOfTabs++;
 
             addChild(term, index); // integerConsant | stringConstant | keywordConstant
             index += 1;
-
-            numberOfTabs -= 2;
         }
         else if (getToken(index).token().equals("(")) {
-            numberOfTabs++;
 
             addSubroot(root, "term");
             Element term = getDirectChild(root, "term");
-
-            numberOfTabs++;
 
             addChild(term, index); // (
             index += 1;
@@ -463,32 +384,22 @@ class CompilationEngine { // TODO after last child add tab
 
             addChild(term, index); // )
             index += 1;
-
-            numberOfTabs -= 2;
         }
         else if (op.contains(getToken(index).token())) {
-            numberOfTabs++;
 
             addSubroot(root, "term");
             Element term = getDirectChild(root, "term");
-
-            numberOfTabs++;
 
             addChild(term, index); // unaryOp
             index += 1;
 
             compileTerm(term);
-
-            numberOfTabs -= 2;
         }
-        else if (getToken(index).tokenType().equals(TOKEN_TYPE.IDENTIFIER)) {
+        else if (getToken(index).tokenType().equals("identifier")) {
             if (getToken(index+1).token().equals("[")) {
-                numberOfTabs++;
 
                 addSubroot(root, "term");
                 Element term = getDirectChild(root, "term");
-
-                numberOfTabs++;
 
                 addChild(term, index); // varName
                 addChild(term, index+1); // [
@@ -498,11 +409,8 @@ class CompilationEngine { // TODO after last child add tab
 
                 addChild(term, index); // ]
                 index += 1;
-
-                numberOfTabs -= 2;
             }
             else if (getToken(index+1).token().equals(".")) {
-                numberOfTabs++;
                 
                 Element termRoot = root;
                 if (letStatementBool == true) {
@@ -510,20 +418,16 @@ class CompilationEngine { // TODO after last child add tab
                     termRoot = getDirectChild(root, "term");  // it has to add term when let
                 }
 
-                numberOfTabs++;
-                
                 addChild(termRoot, index); // className | varName
                 addChild(termRoot, index+1); // .
                 addChild(termRoot, index+2); // subroutineName
                 addChild(termRoot, index+3); // (
                 index += 4;
 
-                compileExpressionList(root);
+                compileExpressionList(termRoot);
 
                 addChild(termRoot, index); // )
                 index += 1;
-
-                numberOfTabs -= 2;
                 
             }
             else if (getToken(index+1).token().equals("(")) {
@@ -537,65 +441,48 @@ class CompilationEngine { // TODO after last child add tab
                 index += 1;
             }
             else {
-                numberOfTabs++;
-
                 addSubroot(root, "term");
                 Element term = getDirectChild(root, "term");
 
-                numberOfTabs++;
-
                 addChild(term, index); // varName
                 index += 1;
-
-                numberOfTabs -= 2;
             }
         }
         else if (op.contains(getToken(index).token())) {
-            numberOfTabs++;
 
             addSubroot(root, "term");
             Element term = getDirectChild(root, "term");
-
-            numberOfTabs++;
             addChild(term, index); // op
             index += 1;
 
             compileTerm(term);
-
-            numberOfTabs -= 2;
         }
         else if (getToken(index).token().equals("true") || 
                  getToken(index).token().equals("false") || 
                  getToken(index).token().equals("null") || 
                  getToken(index).token().equals("this")) 
         {
-            numberOfTabs++;
 
             addSubroot(root, "term");
             Element term = getDirectChild(root, "term");
 
-            numberOfTabs++;
-
             addChild(term, index);
             index += 1;
-
-            numberOfTabs -= 2;
         }
     }
 
     private void compileExpressionList(Element root) {
         addSubroot(root, "expressionList");
         Element expressionList = getDirectChild(root, "expressionList");
-        numberOfTabs++;
+
         while (!(getToken(index).token().equals(")"))) {
             compileExpression(expressionList);
-            // expressionList.appendChild(this.document.createTextNode("\n"));
+            
             if (getToken(index).token().equals(",")) {
                 addChild(expressionList, index);
                 index += 1;
             }
         }
-        numberOfTabs--;
     }
 
     private LexicalElement getToken(int index) {
@@ -603,36 +490,20 @@ class CompilationEngine { // TODO after last child add tab
     }
 
     private void addChild(Element parent, int index) {
-        System.out.println(index);
-        String tabs = String.format("%0" + numberOfTabs + "d", 0).replace("0", "  ");
+        Element child = document.createElement(getToken(index).tokenType()); // create <tp> </tp>
 
-        parent.appendChild(this.document.createTextNode("\n"+tabs)); // tokens are childs of root 
-                                                                  // so they must be intended
-        Element child = document.createElement(getToken(index).tokenType().toString().toLowerCase()); // create <tp> </tp>
+        // String description = " "+getToken(index).token()+" ";
+        String description = getToken(index).token();
 
-        String description = " "+getToken(index).token()+" ";
+        System.out.println(description);
+
         child.appendChild(document.createTextNode(description)); // add to it text -> <tp>text</tp>
         parent.appendChild(child); // add token to parent
     }
 
     private void addSubroot(Element parent, String description) {
-        String tabs = "";
-        try {
-            tabs = String.format("%0" + numberOfTabs + "d", 0).replace("0", "  ");
-        } catch (Exception e) {
-            //TODO: handle exception
-        }
-
-        parent.appendChild(this.document.createTextNode("\n"+tabs)); // tokens are childs of root 
-                                                                  // so they must be intended
         Element subRoot = document.createElement(description); // create <tp> </tp>
         parent.appendChild(subRoot); // add token to root (tokens)
-    }
-
-    private void intendEndTag(Element parent) { // TODO how to peel off end tag?
-        String tabs = String.format("%0" + numberOfTabs + "d", 0).replace("0", "  ");
-
-        parent.appendChild(this.document.createTextNode("\n"+tabs));
     }
 
     private static Element getDirectChild(Element parent, String tagName) { // TODO must return recently created element

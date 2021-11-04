@@ -60,11 +60,6 @@ class JackTokenizer {
     }
 
 
-    private void handleComments(Character character) {
-
-    }
-
-
     // serializes token to buffer
     private void parseToken(Character character) throws TransformerException {
         // dashDash stands for "//" comment
@@ -130,6 +125,7 @@ class JackTokenizer {
             if (stringConstant == false) { // open stringConsant buffer
                 stringConstant = true;
                 buffer = "";
+                return;
             }
             else {
                 tokenArray.add(new Token(tokenType(buffer), buffer));
@@ -186,29 +182,29 @@ class JackTokenizer {
     }
 
     
-    private TOKEN_TYPE tokenType(String token) { // Returns the type of current token, 
+    private String tokenType(String token) { // Returns the type of current token, 
                                                  // as a constant.
         if (keywords.contains(token)) {
-            return TOKEN_TYPE.KEYWORD;
+            return "keyword";
         }
         if (token != "") {
             if (symbols.contains(token.charAt(0))) { // handle symbol
-                return TOKEN_TYPE.SYMBOL;
+                return "symbol";
             }
             if (token.chars().allMatch( Character::isDigit)) { // handle integerConstant
                 int number = Integer.parseInt(token);
                 if (number >= 0 && number <= 32767) { // check if integerConstant is in valid range
-                    return TOKEN_TYPE.INT_CONST;
+                    return "integerConstant";
                 }
             }
             if (token.chars().allMatch(c -> isIdentifier(c))) { // handle indentifier
-                return TOKEN_TYPE.IDENTIFIER;
+                return "identifier";
             }
         }
         if (stringConstant == true) { // handle stringConstant
-            return TOKEN_TYPE.STRING_CONST;
+            return "stringConstant";
         }
-        return TOKEN_TYPE.ERROR;
+        return "error";
     }
 
 
