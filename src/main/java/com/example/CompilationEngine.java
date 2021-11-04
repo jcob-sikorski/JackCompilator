@@ -40,7 +40,7 @@ class CompilationEngine {
         // set extension of written file to.xml
         int indexOfDot = file.getName().lastIndexOf('.');
         String name = file.getName().substring(0, indexOfDot);
-        this.file = new File(file.getParent(), name + "EngineGenerated.xml"); // generate new file with previous name modified
+        this.file = new File(file.getParent(), name + "EngineGenerated.xml"); // generates new file with previous name modified
 
         DocumentBuilderFactory documentFactory = DocumentBuilderFactory.newInstance();
         DocumentBuilder documentBuilder = documentFactory.newDocumentBuilder();
@@ -64,15 +64,15 @@ class CompilationEngine {
 
         index += 3;
         CompileClassVarDec(root);
-        while (!getToken(index).token().equals("}")) {
-            CompileSubroutineDec(root);
+        while (!getToken(index).token().equals("}")) { // while its not the end of class
+            CompileSubroutineDec(root);                // compile body of class
         }
         addChild(root, index); // }
         index += 1;
     }
 
 
-    private void CompileClassVarDec(Element root) { // TODO 
+    private void CompileClassVarDec(Element root) {
         while (tokenArray.get(index).token().equals("static") || 
                tokenArray.get(index).token().equals("field")) 
         {
@@ -89,7 +89,7 @@ class CompilationEngine {
                 addChild(classVarDec, index+1); // varName
                 index += 2;
             }
-            addChild(classVarDec, index); // ; // TODO index or index+3?
+            addChild(classVarDec, index); // ;
             index += 1;
         }
     }
@@ -154,15 +154,13 @@ class CompilationEngine {
 
         compileStatements(statements);
 
-        addChild(subroutineBody, index); // } // TODO
+        addChild(subroutineBody, index); // }
         index += 1;
     }
 
 
-    private void compileVarDec(Element root) { // TODO each new call generates new tag <classVarDec> </classVarDec>
+    private void compileVarDec(Element root) {
         while (tokenArray.get(index).token().equals("var")) {
-        // if (tokenArray.get(index).token().equals("var")) {
-
             addSubroot(root, "varDec");
             Element varDec = getDirectChild(root, "varDec");
                 
@@ -228,7 +226,7 @@ class CompilationEngine {
 
         addChild(letStatement, index); // let
         addChild(letStatement, index+1); // varName
-        index += 2; // TODO index = 58
+        index += 2;
 
         if (getToken(index).token().equals("[")) {
             addChild(letStatement, index); // [
@@ -414,8 +412,8 @@ class CompilationEngine {
                 
                 Element termRoot = root;
                 if (letStatementBool == true) {
-                    addSubroot(root, "term");                 // 
-                    termRoot = getDirectChild(root, "term");  // it has to add term when let
+                    addSubroot(root, "term");
+                    termRoot = getDirectChild(root, "term");
                 }
 
                 addChild(termRoot, index); // className | varName
@@ -466,7 +464,7 @@ class CompilationEngine {
             addSubroot(root, "term");
             Element term = getDirectChild(root, "term");
 
-            addChild(term, index);
+            addChild(term, index); // true | false | null | this
             index += 1;
         }
     }
@@ -475,7 +473,7 @@ class CompilationEngine {
         addSubroot(root, "expressionList");
         Element expressionList = getDirectChild(root, "expressionList");
 
-        while (!(getToken(index).token().equals(")"))) {
+        while (!(getToken(index).token().equals(")"))) { // (expression, (',' expression)*)?
             compileExpression(expressionList);
             
             if (getToken(index).token().equals(",")) {
@@ -506,7 +504,7 @@ class CompilationEngine {
         parent.appendChild(subRoot); // add token to root (tokens)
     }
 
-    private static Element getDirectChild(Element parent, String tagName) { // TODO must return recently created element
+    private static Element getDirectChild(Element parent, String tagName) { // gets last created child by tagName
         for(Node child = parent.getLastChild(); child != null; child = child.getParentNode()) {
             if (child instanceof Element && tagName.equals(child.getNodeName())) {
                 return (Element) child;

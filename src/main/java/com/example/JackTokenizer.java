@@ -24,7 +24,6 @@ class JackTokenizer {
     private boolean integerConstant = false;
     private boolean identifierKeyword = false;
     private boolean prevDash = false;
-    private boolean comment = false;
     private boolean dashStar = false;
     private boolean dashDash = false;
     private boolean prevStar = false;
