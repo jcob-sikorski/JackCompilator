@@ -1,5 +1,5 @@
 package com.example;
 
-public enum VARIABLE_IDENTIFIER {
-    STATIC, FIELD, ARG, VAR, NONE;
+public enum VARIABLE_IDENTIFIER { // when to use variableIdentifiers
+    STATIC, FIELD, ARGUMENT, LOCAL, NONE;
 }

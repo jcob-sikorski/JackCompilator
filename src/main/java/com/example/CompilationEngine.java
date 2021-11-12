@@ -2,7 +2,10 @@ package com.example;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.Set;
 
 import javax.xml.parsers.ParserConfigurationException;
@@ -10,208 +13,219 @@ import javax.xml.transform.TransformerException;
 import org.xml.sax.SAXException;
 import java.io.File;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
 
-
-class CompilationEngine { // TODO use VMWriter and symbolTable to write .vm
-    private File file;
-
-    private Document document;
-
-    private ArrayList<Token> tokenArray;
+class CompilationEngine {
+    private ArrayList<LexicalElement> tokenArray = new ArrayList<LexicalElement>();
     private int index = 0;
-    private boolean letStatementBool = false;
+
+    private String className;
+    private Integer nParams;
+    private Integer nExpr;
+    private String subroutineType;
+
+    private SymbolTable classSymbolTable = new SymbolTable();
+    private SymbolTable subroutineSymbolTable = new SymbolTable();
+
+    private Deque<String> opStack = new LinkedList<String>();
+
+    private Deque<Integer> nOperatorsToPop = new LinkedList<Integer>();
+
+    private VMWriter vmWriter;
 
     private Set<String> op = new HashSet<String>() {{
         add("+"); add("-"); add("*"); add("/"); add("&"); add("|"); add("<"); add(">"); add("="); add("~");
     }};
 
+    private HashMap<String, String> opFun = new HashMap<String, String>() {{ // (!) except division and multiply
+        put("+", "add"); put("-", "sub"); put("&", "and"); put("|", "or"); put("<", "lt"); put(">", "gt"); put("=", "eq"); put("~", "neg");
+    }};
+
     // prepares file to be written
-    public CompilationEngine(File file, ArrayList<Token> tokenArray) throws IOException, TransformerException, ParserConfigurationException, SAXException {  
-        // copy name of parsed file and 
-        // set extension of written file to.xml
+    public CompilationEngine(File file, ArrayList<Token> tokenArray) throws IOException, TransformerException, ParserConfigurationException, SAXException { 
         int indexOfDot = file.getName().lastIndexOf('.');
         String name = file.getName().substring(0, indexOfDot);
-        this.file = new File(file.getParent(), name + "EngineGenerated.xml"); // generates new file with previous name modified
+        vmWriter = new VMWriter(file.getParent() + "/" + name + "EngineGenerated.vm");
 
-        DocumentBuilderFactory documentFactory = DocumentBuilderFactory.newInstance();
-        DocumentBuilder documentBuilder = documentFactory.newDocumentBuilder();
-        document = documentBuilder.newDocument();
-        TransformerFactory tf = TransformerFactory.newInstance();  
-        Transformer t = tf.newTransformer();
-        t.setOutputProperty("omit-xml-declaration", "yes"); 
-        this.tokenArray = tokenArray;
+        for (Token token : tokenArray) {
+            LexicalElement lexicalElement = new LexicalElement(token.tokenType(), token.token());
+            this.tokenArray.add(lexicalElement);
+        }
 
-        Element root = this.document.createElement("class"); // create root of document
+        CompileClass();
 
-        CompileClass(root);
-
-        t.transform(new DOMSource(root), new StreamResult(this.file)); // write XML file
+        vmWriter.close();
     };
 
-    private void CompileClass(Element root) {
-        addChild(root, index); // class
-        addChild(root, index+1); // className
-        addChild(root, index+2); // {
-
+    private void CompileClass() throws IOException {
+                                                     // class
+        className = tokenArray.get(index+1).token(); // className
+                                                     // {
         index += 3;
-        CompileClassVarDec(root);
-        while (!getToken(index).token().equals("}")) { // while its not the end of class
-            CompileSubroutineDec(root);                // compile body of class
+
+        classSymbolTable.reset();
+        
+        CompileClassVarDec();
+        while (!tokenArray.get(index).token().equals("}")) { // while its not the end of class
+            CompileSubroutineDec();                          // compile body of class
         }
-        addChild(root, index); // }
+                    // }
         index += 1;
     }
 
 
-    private void CompileClassVarDec(Element root) {
+    private void CompileClassVarDec() {
         while (tokenArray.get(index).token().equals("static") || 
                tokenArray.get(index).token().equals("field")) 
         {
-            addSubroot(root, "classVarDec");
-            Element classVarDec = getDirectChild(root, "classVarDec");
-            
-            addChild(classVarDec, index); // static | field
-            addChild(classVarDec, index+1); // type
-            addChild(classVarDec, index+2); // varName
+            String kind = tokenArray.get(index).token();   // static | field
+            String type = tokenArray.get(index+1).token(); // type
+            String name = tokenArray.get(index+2).token(); // varName
+            classSymbolTable.put(name, type, kind);
             index += 3;
 
-            while (getToken(index).token().equals(",")) { // (',' varName)*
-                addChild(classVarDec, index); // ,
-                addChild(classVarDec, index+1); // varName
+
+            while (tokenArray.get(index).token().equals(",")) { // (',' varName)*
+                                                                // ,
+                name = tokenArray.get(index+1).token();         // varName
+                classSymbolTable.put(name, type, kind);
                 index += 2;
             }
-            addChild(classVarDec, index); // ;
+                        // ;
             index += 1;
         }
     }
 
 
-    private void CompileSubroutineDec(Element root) {
+    private void CompileSubroutineDec() throws IOException { // TODO write edge case for constructor
         if (tokenArray.get(index).token().equals("constructor") ||
             tokenArray.get(index).token().equals("function") ||
             tokenArray.get(index).token().equals("method")) 
         {
-            addSubroot(root, "subroutineDec");
-            Element subroutineDec = getDirectChild(root, "subroutineDec");
+            subroutineSymbolTable.reset();
             
 
-            addChild(subroutineDec, index); // constructor | function | method
-            addChild(subroutineDec, index+1); // 'void' | type
-            addChild(subroutineDec, index+2); // subroutineName
-            addChild(subroutineDec, index+3); // (
+            String subroutine = tokenArray.get(index).token();       // constructor | function | method
+            subroutineType = tokenArray.get(index+1).token();        // 'void' | type
+            String subroutineName = tokenArray.get(index+2).token(); // subroutineName
+                        // (
             index += 4;
 
-            compileParameterList(subroutineDec);
-
-            addChild(subroutineDec, index); // )
+            compileParameterList();
+                        // )
+            vmWriter.writeFunction(className + "." + subroutineName, nParams);
             index += 1;
 
-            compileSubroutineBody(subroutineDec);
+            if (subroutine.equals("method")) {
+                vmWriter.writePush(SEGMENT.ARGUMENT, 0);
+                vmWriter.writePop(SEGMENT.POINTER, 0); // THIS = argument 0 (for methods)
+            }
+
+            compileSubroutineBody();
         }
     }
 
 
-    private void compileParameterList(Element subroutineDec) {
-        addSubroot(subroutineDec, "parameterList");
-        Element parameterList = getDirectChild(subroutineDec, "parameterList");
-        
-        while (!getToken(index).token().equals(")")) {
-            addChild(parameterList, index); // type
-            addChild(parameterList, index+1); // varName
+    private void compileParameterList() {
+        nParams = 0;
+
+        if (!tokenArray.get(index).token().equals(")")) {
+            String type = tokenArray.get(index).token();   // type
+            String name = tokenArray.get(index+1).token(); // varName
+
+            subroutineSymbolTable.put("this", type, "ARG");
+            subroutineSymbolTable.put(name, type, "ARG");
+            nParams++;
+
+            index += 2;
+            
+        }
+
+        while (!tokenArray.get(index).token().equals(")")) {
+            String type = tokenArray.get(index).token();   // type
+            String name = tokenArray.get(index+1).token(); // varName
+            
+            subroutineSymbolTable.put(name, type, "ARG");
+            nParams++;
+
             index += 2;
 
-            if (!getToken(index).token().equals(",")) {
+            if (!tokenArray.get(index).token().equals(",")) {
                 break;
             }
             else {
-                addChild(parameterList, index); // ,
+                            // ,
                 index += 1;
             }
         }
     }
 
 
-    private void compileSubroutineBody(Element subroutineDec) {
-        addSubroot(subroutineDec, "subroutineBody");
-        Element subroutineBody = getDirectChild(subroutineDec, "subroutineBody");
-        
-        addChild(subroutineBody, index); // {
+    private void compileSubroutineBody() throws IOException {
+                     // {
         index += 1;
 
-        compileVarDec(subroutineBody);
-
-        addSubroot(subroutineBody, "statements");
-        Element statements = getDirectChild(subroutineBody, "statements");
-
-        compileStatements(statements);
-
-        addChild(subroutineBody, index); // }
+        compileVarDec();
+        compileStatements();
+                     // }
         index += 1;
     }
 
 
-    private void compileVarDec(Element root) {
-        while (tokenArray.get(index).token().equals("var")) {
-            addSubroot(root, "varDec");
-            Element varDec = getDirectChild(root, "varDec");
-                
-            addChild(varDec, index); // var       
-            addChild(varDec, index+1); // type    
-            addChild(varDec, index+2); // varName 
+    private void compileVarDec() {
+        while (tokenArray.get(index).token().equals("var")) {    
+            String kind = tokenArray.get(index).token();   // var
+            if (kind.equals("var")) {
+                kind = "local";
+            }
+            String type = tokenArray.get(index+1).token(); // type    
+            String name = tokenArray.get(index+2).token(); // varName 
+            subroutineSymbolTable.put(name, type, kind);
             index += 3;
     
-            while (!getToken(index).token().equals(";")) {
-                if (!getToken(index).token().equals(",")) {
+            while (!tokenArray.get(index).token().equals(";")) {
+                if (!tokenArray.get(index).token().equals(",")) {
                     break;
                 }
-                addChild(varDec, index); // ,
-                addChild(varDec, index+1); // varName
+                            // ,
+                name = tokenArray.get(index+1).token(); // varName 
+                subroutineSymbolTable.put(name, type, kind);
                 index += 2;
             }
-            addChild(varDec, index); // ;
+                        // ;
             index += 1;
         }
     }
 
 
-    private void compileStatements(Element statements) {
-        switch (tokenArray.get(index).token()) { // serializer doesn't know about when the body of xml exists, we have to add it manually in compilation engine
+    private void compileStatements() throws IOException {
+        switch (tokenArray.get(index).token()) {
             case "if":
                 
-                compileIf(statements);
-                compileStatements(statements);
+                compileIf();
+                compileStatements();
                 break;
 
             case "let":
                 
-                compileLet(statements);
-                compileStatements(statements);
+                compileLet();
+                compileStatements();
                 break;
 
             case "while":
                 
-                compileWhile(statements);
-                compileStatements(statements);
+                compileWhile();
+                compileStatements();
                 break;
 
             case "do":
                 
-                compileDo(statements);
-                compileStatements(statements);
+                compileDo();
+                compileStatements();
                 break;
 
             case "return":
                 
-                compileReturn(statements);
+                compileReturn();
                 break;
 
             default:
@@ -220,296 +234,288 @@ class CompilationEngine { // TODO use VMWriter and symbolTable to write .vm
     }
 
 
-    private void compileLet(Element statements) {
-        addSubroot(statements, "letStatement");
-        Element letStatement = getDirectChild(statements, "letStatement");
+    private void compileLet() throws IOException {
 
-        addChild(letStatement, index); // let
-        addChild(letStatement, index+1); // varName
+                                                          // let
+        String varName = tokenArray.get(index+1).token(); // varName
         index += 2;
 
-        if (getToken(index).token().equals("[")) {
-            addChild(letStatement, index); // [
+        if (tokenArray.get(index).token().equals("[")) {
+                        // [
             index += 1;
 
-            compileExpression(letStatement);
-            addChild(letStatement, index); // ]
+            compileExpression();
+                        // ]
             index += 1;
         }
-
-        addChild(letStatement, index); // =
+                    // =
         index += 1;
 
-        letStatementBool = true;
-        compileExpression(letStatement);
-        letStatementBool = false;
-        addChild(letStatement, index); // ;
+        compileExpression();
+                    // ;
         index += 1;
+
+        popVariable(varName);
     }
 
 
-    private void compileIf(Element statements) {
-
-        addSubroot(statements, "ifStatement");
-        Element ifStatement = getDirectChild(statements, "ifStatement");
-        
-        addChild(ifStatement, index); // if
-        addChild(ifStatement, index+1); // (
+    private void compileIf() throws IOException {
+                    // if
+                    // (
         index += 2;
 
-        compileExpression(ifStatement);
+        compileExpression();
 
-        addChild(ifStatement, index); // )
-        addChild(ifStatement, index+1); // {
+                    // )
+                    // {
         index += 2;
-
-        addSubroot(ifStatement, "statements");
-        Element statements1 = getDirectChild(ifStatement, "statements");
         
-        compileStatements(statements1);
+        compileStatements();
         
-        addChild(ifStatement, index); // }
+                     // }
         index += 1;
 
-        if (getToken(index).token().equals("else")) {
-            addChild(ifStatement, index); // else
-            addChild(ifStatement, index+1); // {
+        if (tokenArray.get(index).token().equals("else")) {
+                        // else
+                        // {
             index += 2;
-
-            addSubroot(ifStatement, "statements");
-            Element statements2 = getDirectChild(ifStatement, "statements");
             
-            compileStatements(statements2);
+            compileStatements();
 
-            addChild(ifStatement, index); // }
+                        // }
             index += 1;
         }
 
     }
 
 
-    private void compileWhile(Element statements) {
-
-        addSubroot(statements, "whileStatement");
-        Element whileStatement = getDirectChild(statements, "whileStatement");
-
-        addChild(whileStatement, index); // while
-        addChild(whileStatement, index+1); // (
+    private void compileWhile() throws IOException {
+                    // while
+                    // (
         index += 2;
 
         
-        compileExpression(whileStatement);
+        compileExpression();
 
-        addChild(whileStatement, index); // )
-        addChild(whileStatement, index+1); // {
+                    // )
+                    // {
         index += 2;
 
-        addSubroot(whileStatement, "statements");
-        Element statements1 = getDirectChild(whileStatement, "statements");
+        compileStatements();
 
-        compileStatements(statements1);
-
-        addChild(whileStatement, index); // }
+                    // }
         index += 1;
     }
 
 
-    private void compileDo(Element statements) {
-        addSubroot(statements, "doStatement");
-        Element doStatement = getDirectChild(statements, "doStatement");
-
-        addChild(doStatement, index); // do
+    private void compileDo() throws IOException {
+                    // do
         index += 1;
 
+        compileTerm();
 
-        compileTerm(doStatement);
-
-        addChild(doStatement, index); // ;
+                    // ;
         index += 1;
     }
 
 
-    private void compileReturn(Element statements) {
-        addSubroot(statements, "returnStatement");
-        Element returnStatement = getDirectChild(statements, "returnStatement");
-
-        addChild(returnStatement, index); // return
+    private void compileReturn() throws IOException {
+                    // return
         index += 1;
 
-        if (!getToken(index).token().equals(";")) {
+        if (!tokenArray.get(index).token().equals(";")) {
+            compileExpression();
+        }
+                    // ;
+        if (subroutineType.equals("void")) {
+            // vmWriter.writePop(SEGMENT.TEMP, 0);
+            vmWriter.writePush(SEGMENT.CONSTANT, 0);
+        }
+        vmWriter.writeReturn();
+        index += 1;
+    }
+
+    private void compileExpression() throws IOException {
+
+        nOperatorsToPop.add(0);
+
+        compileTerm();  // write values in order
+                        // add operands to stack
+
+        Integer n = nOperatorsToPop.pollLast(); // pop n number of operands from operands stack
+
+        while (n > 0) {
+            String operator = opStack.pollLast();
+
+            if (opFun.containsKey(operator)) {
+                vmWriter.writeArithmetic(opFun.get(operator));
+            }
+            else if (operator.equals("*")) {
+                vmWriter.writeCall("Math.multiply", 2);
+            }
+            else if (operator.equals("/")) {
+                vmWriter.writeCall("Math.divide", 2);
+            }
+            n--;
+        }
+    }
+
+    private void compileTerm() throws IOException {
+        if (tokenArray.get(index).tokenType().equals("stringConstant")) {
+            index += 1;
+        }
+        else if (tokenArray.get(index).tokenType().equals("integerConstant")) {
+                vmWriter.writePush(SEGMENT.CONSTANT, Integer.parseInt(tokenArray.get(index).token()));
+                index += 1;
+                compileTerm(); // continue expression
+        }
+        else if (tokenArray.get(index).tokenType().equals("keyword")) {
+            LexicalElement token = tokenArray.get(index);
+
+            pushVariable(token.token());
+            index += 1;
+
+            compileTerm(); // continue expression
+        }
+        else if (tokenArray.get(index).token().equals("(")) {
+                        // (
+            index += 1;
             
-            compileExpression(returnStatement);
-        }
-        addChild(returnStatement, index); // ;
-        index += 1;
-    }
+            compileExpression();
 
-    private void compileExpression(Element root) {
-        addSubroot(root, "expression");
-        Element expression = getDirectChild(root, "expression");
-
-        compileTerm(expression);
-
-        while (op.contains(getToken(index).token())) {
-            addChild(expression, index); // op
+                        // )
             index += 1;
 
-            compileTerm(expression);
+            if (opFun.containsKey(tokenArray.get(index).token())) {
+                compileTerm();
+            }
         }
-    }
+        // else if (op.contains(tokenArray.get(index).token())) { // shades other operations
+        //                                                        // generating wrong result
 
-    private void compileTerm(Element root) {
-        if (getToken(index).tokenType().equals("integerConstant") || 
-            getToken(index).tokenType().equals("stringConstant") || 
-            getToken(index).tokenType().equals("keyword")) 
-            {
+        //                 // unaryOp           // TODO can't handle unaryOp now
+        //     index += 1;
 
-            addSubroot(root, "term");
-            Element term = getDirectChild(root, "term");
+        //     compileTerm();
+        // }
+        else if (tokenArray.get(index).tokenType().equals("identifier")) {
+            if (tokenArray.get(index+1).token().equals("[")) {
 
-            addChild(term, index); // integerConsant | stringConstant | keywordConstant
-            index += 1;
-        }
-        else if (getToken(index).token().equals("(")) {
-
-            addSubroot(root, "term");
-            Element term = getDirectChild(root, "term");
-
-            addChild(term, index); // (
-            index += 1;
-
-            compileExpression(term);
-
-            addChild(term, index); // )
-            index += 1;
-        }
-        else if (op.contains(getToken(index).token())) {
-
-            addSubroot(root, "term");
-            Element term = getDirectChild(root, "term");
-
-            addChild(term, index); // unaryOp
-            index += 1;
-
-            compileTerm(term);
-        }
-        else if (getToken(index).tokenType().equals("identifier")) {
-            if (getToken(index+1).token().equals("[")) {
-
-                addSubroot(root, "term");
-                Element term = getDirectChild(root, "term");
-
-                addChild(term, index); // varName
-                addChild(term, index+1); // [
+                            // varName
+                            // [
                 index += 2;
 
-                compileExpression(term);
+                compileExpression();
 
-                addChild(term, index); // ]
+                            // ]
                 index += 1;
             }
-            else if (getToken(index+1).token().equals(".")) {
-                
-                Element termRoot = root;
-                if (letStatementBool == true) {
-                    addSubroot(root, "term");
-                    termRoot = getDirectChild(root, "term");
-                }
+            else if (tokenArray.get(index+1).token().equals(".")) {
+                String objectName = tokenArray.get(index).token();       // className | varName
+                                                                         // .
+                String subroutineName = tokenArray.get(index+2).token(); // subroutineName
 
-                addChild(termRoot, index); // className | varName
-                addChild(termRoot, index+1); // .
-                addChild(termRoot, index+2); // subroutineName
-                addChild(termRoot, index+3); // (
+                                                             // (
                 index += 4;
 
-                compileExpressionList(termRoot);
+                compileExpressionList();
 
-                addChild(termRoot, index); // )
+                                                            // )
                 index += 1;
-                
+
+                vmWriter.writeCall(objectName + "." + subroutineName, nExpr);
+                // TODO when to write pop temp 0?
             }
-            else if (getToken(index+1).token().equals("(")) {
-                addChild(root, index); // subroutineName
-                addChild(root, index+1); // (
+            else if (tokenArray.get(index+1).token().equals("(")) {
+                            // subroutineName
+                            // (
                 index += 2;
 
-                compileExpressionList(root);
+                compileExpressionList();
                 
-                addChild(root, index); // )
+                            // )
                 index += 1;
             }
             else {
-                addSubroot(root, "term");
-                Element term = getDirectChild(root, "term");
-
-                addChild(term, index); // varName
+                            // varName
                 index += 1;
             }
         }
-        else if (op.contains(getToken(index).token())) {
+        else if (op.contains(tokenArray.get(index).token())) {
+                        // op
+            opStack.add(tokenArray.get(index).token());
 
-            addSubroot(root, "term");
-            Element term = getDirectChild(root, "term");
-            addChild(term, index); // op
+                        // update number of operands to pop in current scope
+            Integer n = nOperatorsToPop.pollLast();
+            nOperatorsToPop.add(n+1);
             index += 1;
-
-            compileTerm(term);
+                        // continue expression
+            compileTerm();
         }
-        else if (getToken(index).token().equals("true") || 
-                 getToken(index).token().equals("false") || 
-                 getToken(index).token().equals("null") || 
-                 getToken(index).token().equals("this")) 
+        else if (tokenArray.get(index).token().equals("true") || 
+                 tokenArray.get(index).token().equals("false") || 
+                 tokenArray.get(index).token().equals("null") || 
+                 tokenArray.get(index).token().equals("this")) 
         {
 
-            addSubroot(root, "term");
-            Element term = getDirectChild(root, "term");
-
-            addChild(term, index); // true | false | null | this
+                        // true | false | null | this
             index += 1;
         }
     }
 
-    private void compileExpressionList(Element root) {
-        addSubroot(root, "expressionList");
-        Element expressionList = getDirectChild(root, "expressionList");
-
-        while (!(getToken(index).token().equals(")"))) { // (expression, (',' expression)*)?
-            compileExpression(expressionList);
+    private void compileExpressionList() throws IOException {
+        nExpr = 0;
+        while (!(tokenArray.get(index).token().equals(")"))) { // (expression, (',' expression)*)?
+            compileExpression(); // TODO omits - 6 in first parentheses
+            nExpr++;
             
-            if (getToken(index).token().equals(",")) {
-                addChild(expressionList, index);
+            if (tokenArray.get(index).token().equals(",")) {
+                            // ,
                 index += 1;
             }
         }
     }
 
-    private LexicalElement getToken(int index) {
-        return new LexicalElement(tokenArray.get(index).tokenType(), tokenArray.get(index).token());
-    }
+    private void pushVariable(String varName) throws IOException {
+        VARIABLE_IDENTIFIER variableIdentifier;
 
-    private void addChild(Element parent, int index) {
-        Element child = document.createElement(getToken(index).tokenType()); // create <tp> </tp>
-
-        // String description = " "+getToken(index).token()+" ";
-        String description = getToken(index).token();
-
-        System.out.println(description);
-
-        child.appendChild(document.createTextNode(description)); // add to it text -> <tp>text</tp>
-        parent.appendChild(child); // add token to parent
-    }
-
-    private void addSubroot(Element parent, String description) {
-        Element subRoot = document.createElement(description); // create <tp> </tp>
-        parent.appendChild(subRoot); // add token to root (tokens)
-    }
-
-    private static Element getDirectChild(Element parent, String tagName) { // gets last created child by tagName
-        for(Node child = parent.getLastChild(); child != null; child = child.getParentNode()) {
-            if (child instanceof Element && tagName.equals(child.getNodeName())) {
-                return (Element) child;
-            }
+        if (!subroutineSymbolTable.kindOf(varName).equals(VARIABLE_IDENTIFIER.NONE)) {
+            variableIdentifier = subroutineSymbolTable.kindOf(varName);
         }
-        return null;
+        else {
+            variableIdentifier = classSymbolTable.kindOf(varName);
+        }
+
+        Integer indexOnRam = subroutineSymbolTable.indexOf(varName);
+
+        if (variableIdentifier == VARIABLE_IDENTIFIER.FIELD) {
+            vmWriter.writePush(SEGMENT.THIS, indexOnRam);
+        }
+        else {
+            SEGMENT segment = SEGMENT.valueOf(variableIdentifier.toString());
+            vmWriter.writePush(segment, indexOnRam);
+        }
+    }
+
+    private void popVariable(String varName) throws IOException {
+        VARIABLE_IDENTIFIER variableIdentifier;
+
+        if (subroutineSymbolTable.kindOf(varName) != VARIABLE_IDENTIFIER.NONE) {
+            variableIdentifier = subroutineSymbolTable.kindOf(varName);
+            
+        }
+        else {
+            variableIdentifier = classSymbolTable.kindOf(varName);
+        }
+
+        Integer indexOnRam = subroutineSymbolTable.indexOf(varName);
+
+        if (variableIdentifier == VARIABLE_IDENTIFIER.LOCAL) {
+            vmWriter.writePop(SEGMENT.THIS, indexOnRam);
+        }
+        else {
+            SEGMENT segment = SEGMENT.valueOf(variableIdentifier.toString());
+            vmWriter.writePop(segment, index);
+        }
     }
 };
