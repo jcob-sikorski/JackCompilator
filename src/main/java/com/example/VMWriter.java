@@ -32,7 +32,7 @@ public class VMWriter {
         fileWriter.write("goto " + label + "\n");
     }
 
-    public void writeIf(String label) throws IOException {
+    public void writeIfGoto(String label) throws IOException {
         fileWriter.write("if-goto " + label + "\n");
     }
 
@@ -49,7 +49,6 @@ public class VMWriter {
     }
 
     public void close() throws IOException {
-        // TODO is this function really necessary?
         fileWriter.close();
     }
 }

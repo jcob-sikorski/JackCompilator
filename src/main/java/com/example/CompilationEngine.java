@@ -16,11 +16,14 @@ import java.io.File;
 
 class CompilationEngine {
     private ArrayList<LexicalElement> tokenArray = new ArrayList<LexicalElement>();
-    private int index = 0;
+    private Integer index = 0;
+
+    private Integer labelNumber = 0;
 
     private String className;
-    private Integer nParams;
     private Integer nExpr;
+    private Integer nVars;
+    private String subroutine;
     private String subroutineType;
 
     private SymbolTable classSymbolTable = new SymbolTable();
@@ -102,9 +105,9 @@ class CompilationEngine {
             tokenArray.get(index).token().equals("method")) 
         {
             subroutineSymbolTable.reset();
-            
+            nVars = 0;
 
-            String subroutine = tokenArray.get(index).token();       // constructor | function | method
+            subroutine = tokenArray.get(index).token();       // constructor | function | method
             subroutineType = tokenArray.get(index+1).token();        // 'void' | type
             String subroutineName = tokenArray.get(index+2).token(); // subroutineName
                         // (
@@ -112,62 +115,48 @@ class CompilationEngine {
 
             compileParameterList();
                         // )
-            vmWriter.writeFunction(className + "." + subroutineName, nParams);
-            index += 1;
+
+                        // {
+            index += 2;
+            compileVarDec();
+
+            vmWriter.writeFunction(className + "." + subroutineName, nVars);
 
             if (subroutine.equals("method")) {
                 vmWriter.writePush(SEGMENT.ARGUMENT, 0);
                 vmWriter.writePop(SEGMENT.POINTER, 0); // THIS = argument 0 (for methods)
             }
 
-            compileSubroutineBody();
+            compileStatements();
+                        // }
+            index += 1;
         }
     }
 
 
     private void compileParameterList() {
-        nParams = 0;
-
         if (!tokenArray.get(index).token().equals(")")) {
             String type = tokenArray.get(index).token();   // type
             String name = tokenArray.get(index+1).token(); // varName
 
-            subroutineSymbolTable.put("this", type, "ARG");
-            subroutineSymbolTable.put(name, type, "ARG");
-            nParams++;
+            if (subroutine.equals("method")) {
+                subroutineSymbolTable.put("this", type, "ARGUMENT"); // THIS = argument 0 (for methods)
+            }
+            subroutineSymbolTable.put(name, type, "ARGUMENT");
 
             index += 2;
-            
         }
 
         while (!tokenArray.get(index).token().equals(")")) {
+                        // ,
+            index += 1;
             String type = tokenArray.get(index).token();   // type
             String name = tokenArray.get(index+1).token(); // varName
             
-            subroutineSymbolTable.put(name, type, "ARG");
-            nParams++;
+            subroutineSymbolTable.put(name, type, "ARGUMENT");
 
             index += 2;
-
-            if (!tokenArray.get(index).token().equals(",")) {
-                break;
-            }
-            else {
-                            // ,
-                index += 1;
-            }
         }
-    }
-
-
-    private void compileSubroutineBody() throws IOException {
-                     // {
-        index += 1;
-
-        compileVarDec();
-        compileStatements();
-                     // }
-        index += 1;
     }
 
 
@@ -175,13 +164,14 @@ class CompilationEngine {
         while (tokenArray.get(index).token().equals("var")) {    
             String kind = tokenArray.get(index).token();   // var
             if (kind.equals("var")) {
-                kind = "local";
+                kind = "LOCAL";
             }
             String type = tokenArray.get(index+1).token(); // type    
             String name = tokenArray.get(index+2).token(); // varName 
             subroutineSymbolTable.put(name, type, kind);
             index += 3;
-    
+            nVars++;
+
             while (!tokenArray.get(index).token().equals(";")) {
                 if (!tokenArray.get(index).token().equals(",")) {
                     break;
@@ -190,6 +180,7 @@ class CompilationEngine {
                 name = tokenArray.get(index+1).token(); // varName 
                 subroutineSymbolTable.put(name, type, kind);
                 index += 2;
+                nVars++;
             }
                         // ;
             index += 1;
@@ -267,6 +258,13 @@ class CompilationEngine {
         compileExpression();
 
                     // )
+
+        vmWriter.writeArithmetic("not");
+
+        String l1 = "L" + String.valueOf(++labelNumber);
+
+        vmWriter.writeIfGoto(l1);
+
                     // {
         index += 2;
         
@@ -274,6 +272,12 @@ class CompilationEngine {
         
                      // }
         index += 1;
+
+        String l2 = "L" + String.valueOf(++labelNumber);
+
+        vmWriter.writeGoto(l2);
+
+        vmWriter.writeLabel(l1);
 
         if (tokenArray.get(index).token().equals("else")) {
                         // else
@@ -285,11 +289,14 @@ class CompilationEngine {
                         // }
             index += 1;
         }
-
+        vmWriter.writeLabel(l2);
     }
 
 
     private void compileWhile() throws IOException {
+        String l1 = "L" + String.valueOf(++labelNumber);
+
+        vmWriter.writeLabel(l1);
                     // while
                     // (
         index += 2;
@@ -298,6 +305,12 @@ class CompilationEngine {
         compileExpression();
 
                     // )
+
+        vmWriter.writeArithmetic("not");
+
+        String l2 = "L" + String.valueOf(++labelNumber);
+        vmWriter.writeIfGoto(l2);
+
                     // {
         index += 2;
 
@@ -305,6 +318,10 @@ class CompilationEngine {
 
                     // }
         index += 1;
+        
+        vmWriter.writeGoto(l1);
+
+        vmWriter.writeLabel(l2);
     }
 
 
@@ -316,6 +333,8 @@ class CompilationEngine {
 
                     // ;
         index += 1;
+
+        vmWriter.writePop(SEGMENT.TEMP, 0);
     }
 
 
@@ -360,7 +379,7 @@ class CompilationEngine {
         }
     }
 
-    private void compileTerm() throws IOException {
+    private void compileTerm() throws IOException { // TODO handle keyword "this"
         if (tokenArray.get(index).tokenType().equals("stringConstant")) {
             index += 1;
         }
@@ -368,6 +387,17 @@ class CompilationEngine {
                 vmWriter.writePush(SEGMENT.CONSTANT, Integer.parseInt(tokenArray.get(index).token()));
                 index += 1;
                 compileTerm(); // continue expression
+        }
+        else if (tokenArray.get(index).token().equals("true")) {
+            vmWriter.writePush(SEGMENT.CONSTANT, 1);
+            vmWriter.writeArithmetic("neg");
+            index += 1;
+        }
+        else if (tokenArray.get(index).token().equals("false") ||
+                tokenArray.get(index).token().equals("null"))
+        {
+            vmWriter.writePush(SEGMENT.CONSTANT, 0);
+            index += 1;
         }
         else if (tokenArray.get(index).tokenType().equals("keyword")) {
             LexicalElement token = tokenArray.get(index);
@@ -424,7 +454,6 @@ class CompilationEngine {
                 index += 1;
 
                 vmWriter.writeCall(objectName + "." + subroutineName, nExpr);
-                // TODO when to write pop temp 0?
             }
             else if (tokenArray.get(index+1).token().equals("(")) {
                             // subroutineName
@@ -438,35 +467,42 @@ class CompilationEngine {
             }
             else {
                             // varName
+                pushVariable(tokenArray.get(index).token());
                 index += 1;
+
+                compileTerm();
             }
         }
+        else if (tokenArray.get(index).token().equals("~")) {
+            index += 1;
+            compileExpression();
+            vmWriter.writeArithmetic("not");
+        }
+        else if (tokenArray.get(index).token().equals("-") &&
+                 !tokenArray.get(index-1).tokenType().equals("integerConstant") &&
+                 !tokenArray.get(index-1).tokenType().equals("identifier"))
+        {
+            index += 1;
+            compileExpression();
+            vmWriter.writeArithmetic("neg");
+        } 
         else if (op.contains(tokenArray.get(index).token())) {
                         // op
             opStack.add(tokenArray.get(index).token());
 
-                        // update number of operands to pop in current scope
+            // update number of operands to pop in current scope
             Integer n = nOperatorsToPop.pollLast();
             nOperatorsToPop.add(n+1);
             index += 1;
                         // continue expression
             compileTerm();
         }
-        else if (tokenArray.get(index).token().equals("true") || 
-                 tokenArray.get(index).token().equals("false") || 
-                 tokenArray.get(index).token().equals("null") || 
-                 tokenArray.get(index).token().equals("this")) 
-        {
-
-                        // true | false | null | this
-            index += 1;
-        }
     }
 
     private void compileExpressionList() throws IOException {
         nExpr = 0;
         while (!(tokenArray.get(index).token().equals(")"))) { // (expression, (',' expression)*)?
-            compileExpression(); // TODO omits - 6 in first parentheses
+            compileExpression();
             nExpr++;
             
             if (tokenArray.get(index).token().equals(",")) {
@@ -500,9 +536,8 @@ class CompilationEngine {
     private void popVariable(String varName) throws IOException {
         VARIABLE_IDENTIFIER variableIdentifier;
 
-        if (subroutineSymbolTable.kindOf(varName) != VARIABLE_IDENTIFIER.NONE) {
+        if (!subroutineSymbolTable.kindOf(varName).equals(VARIABLE_IDENTIFIER.NONE)) {
             variableIdentifier = subroutineSymbolTable.kindOf(varName);
-            
         }
         else {
             variableIdentifier = classSymbolTable.kindOf(varName);
@@ -510,12 +545,12 @@ class CompilationEngine {
 
         Integer indexOnRam = subroutineSymbolTable.indexOf(varName);
 
-        if (variableIdentifier == VARIABLE_IDENTIFIER.LOCAL) {
+        if (variableIdentifier == VARIABLE_IDENTIFIER.FIELD) {
             vmWriter.writePop(SEGMENT.THIS, indexOnRam);
         }
         else {
             SEGMENT segment = SEGMENT.valueOf(variableIdentifier.toString());
-            vmWriter.writePop(segment, index);
+            vmWriter.writePop(segment, indexOnRam);
         }
     }
 };

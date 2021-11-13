@@ -8,19 +8,35 @@ public class SymbolTable {
 
     public void reset() {
         symbolTable.clear();
+        kindLastIndex.clear();
     }
 
     public void put(String name, String type, String kind) {
         VARIABLE_IDENTIFIER convertedKind = VARIABLE_IDENTIFIER.valueOf(kind);
         
-        Integer index = varCount(convertedKind) + 1;
+        Integer index = varCount(convertedKind);
+
+        if (kindLastIndex.containsKey(convertedKind)) {
+            index = kindLastIndex.get(convertedKind)+1;
+            kindLastIndex.put(convertedKind, kindLastIndex.get(convertedKind) + 1);
+        }
+        else {
+            kindLastIndex.put(convertedKind, 0);
+            index = 0;
+        }
+
         IdentifierInfo identifierInfo = new IdentifierInfo(name, type, convertedKind, index);
 
         symbolTable.put(name, identifierInfo);
     }
 
     public Integer varCount(VARIABLE_IDENTIFIER kind) {
-        return kindLastIndex.get(kind);
+        if (kindLastIndex.containsKey(kind)) {
+            return kindLastIndex.get(kind);
+        }
+        else {
+            return -1;
+        }
     }
 
     public VARIABLE_IDENTIFIER kindOf(String name) {
