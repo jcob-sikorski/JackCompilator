@@ -17,6 +17,7 @@ import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
 
 class JackTokenizer {
+    private String filename;
     private String buffer = "";
 
     // booleans help buffering specific sequences
@@ -27,6 +28,8 @@ class JackTokenizer {
     private boolean dashStar = false;
     private boolean dashDash = false;
     private boolean prevStar = false;
+
+    private boolean method = false;
     
     private Set<String> keywords = Collections.unmodifiableSet(
         new HashSet<>(Arrays.asList("class", "constructor", "function", "method", "field", "static",
@@ -36,13 +39,20 @@ class JackTokenizer {
     private Set<Character> symbols = Collections.unmodifiableSet(
         new HashSet<>(Arrays.asList('{', '}', '(', ')', '[', ']', '.', ',', ';', '+', '-', '*', '/', '&', '|','<', '>', '=', '~')));
     
-    private ArrayList<Token> tokenArray = new ArrayList<Token>();
+    private ArrayList<LexicalElement> tokenArray = new ArrayList<LexicalElement>();
+
+    private Set<String> methodCollection = new HashSet<String>() {};
+
+    public JackTokenizer(String filename, Set<String> methodCollection) {
+        this.filename = filename;
+        this.methodCollection = methodCollection;
+    }
 
     // on initialization ignore all comments and whitespace in the input stream, 
     // and serialize it into Jack-language tokens. 
     // The token types are specified according to Jack grammar.
     // returns array containing all serialized tokens
-    public ArrayList<Token> JackTokenizer(File file) throws IOException, TransformerException, ParserConfigurationException {      
+    public ArrayList<LexicalElement> serializeIntoTokens(File file) throws IOException, TransformerException, ParserConfigurationException {      
         BufferedReader reader = new BufferedReader(
             new InputStreamReader(new FileInputStream(file), Charset.forName("UTF-8")));
         int c;
@@ -110,12 +120,12 @@ class JackTokenizer {
         // it was divide symbol!
         if (prevDash && character != '/') {
             prevDash = false;
-            tokenArray.add(new Token(tokenType("/"), "/"));
+            tokenArray.add(new LexicalElement(tokenType("/"), "/"));
         }
         // it was times symbol!
         if (prevStar && character != '*') {
             prevStar = false;
-            tokenArray.add(new Token(tokenType("*"), "*"));
+            tokenArray.add(new LexicalElement(tokenType("*"), "*"));
         }
 
 
@@ -127,7 +137,7 @@ class JackTokenizer {
                 return;
             }
             else {
-                tokenArray.add(new Token(tokenType(buffer), buffer));
+                tokenArray.add(new LexicalElement(tokenType(buffer), buffer));
 
                 stringConstant = false;
                 buffer = "";
@@ -144,7 +154,7 @@ class JackTokenizer {
             return;
         }
         if (integerConstant == true) { // close integerConstant buffer
-            tokenArray.add(new Token(tokenType(buffer), buffer));
+            tokenArray.add(new LexicalElement(tokenType(buffer), buffer));
             buffer = "";
             integerConstant = false; 
         }
@@ -152,7 +162,7 @@ class JackTokenizer {
 
         if (character.equals(' ') || character.equals('\n')) { // ignore whitespace and enters
             if (identifierKeyword == true) {
-                tokenArray.add(new Token(tokenType(buffer), buffer));
+                tokenArray.add(new LexicalElement(tokenType(buffer), buffer));
                 buffer = "";
                 identifierKeyword = false;
             }
@@ -169,13 +179,13 @@ class JackTokenizer {
 
         if (symbols.contains(character)) { // handle symbols
             if (identifierKeyword == true) { // close identifier/keyword buffer
-                tokenArray.add(new Token(tokenType(buffer), buffer));
+                tokenArray.add(new LexicalElement(tokenType(buffer), buffer));
                 buffer = "";
                 identifierKeyword = false;
             }
             buffer = "";
             String sCharacter = character.toString(); // simultaneously write symbol
-            tokenArray.add(new Token(tokenType(sCharacter), sCharacter));
+            tokenArray.add(new LexicalElement(tokenType(sCharacter), sCharacter));
         }
         return;
     }
@@ -184,6 +194,9 @@ class JackTokenizer {
     private String tokenType(String token) { // Returns the type of current token, 
                                                  // as a constant.
         if (keywords.contains(token)) {
+            if (token.equals("method")) {
+                method = true;
+            }
             return "keyword";
         }
         if (token != "") {
@@ -197,6 +210,10 @@ class JackTokenizer {
                 }
             }
             if (token.chars().allMatch(c -> isIdentifier(c))) { // handle indentifier
+                if (method == true) {
+                    methodCollection.add(filename + "." + token);
+                    method = false;
+                }
                 return "identifier";
             }
         }
@@ -210,5 +227,9 @@ class JackTokenizer {
     private boolean isIdentifier(int intObj) {
         char c = (char)(intObj);
         return Character.isLetter(c) || (c == '_');
+    }
+
+    public Set<String> updateMethodCollection() {
+        return this.methodCollection;
     }
 };

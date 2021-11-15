@@ -1,5 +1,6 @@
 package com.example;
 
-public enum SEGMENT { // when to use segments
+// .vm segments
+public enum SEGMENT {
     CONSTANT, ARGUMENT, LOCAL, STATIC, THIS, THAT, POINTER, TEMP;
 }

@@ -1,5 +1,6 @@
 package com.example;
 
+// holds info (tokenType, token) about serialized token
 class LexicalElement {
     private String tokenType;
     private String token;

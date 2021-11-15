@@ -11,51 +11,64 @@ import java.util.Set;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
 import org.xml.sax.SAXException;
-import java.io.File;
 
 
 class CompilationEngine {
+    String filename;
+
     private ArrayList<LexicalElement> tokenArray = new ArrayList<LexicalElement>();
     private Integer index = 0;
 
+    // holds unique label number
+    // used for generating unique labels in .vm file
     private Integer labelNumber = 0;
 
+    // name of compiled file
     private String className;
+
+    // number of expressions between parentheses of called function
     private Integer nExpr;
+
+    // number of variables declared inside subroutine
     private Integer nVars;
+
+    // constructor | method | function
     private String subroutine;
+
+    // void | int | String...
     private String subroutineType;
 
     private SymbolTable classSymbolTable = new SymbolTable();
     private SymbolTable subroutineSymbolTable = new SymbolTable();
 
-    private Deque<String> opStack = new LinkedList<String>();
+    private Set<String> methodCollection;
+
+    private Deque<String> operatorStack = new LinkedList<String>();
 
     private Deque<Integer> nOperatorsToPop = new LinkedList<Integer>();
 
     private VMWriter vmWriter;
 
-    private Set<String> op = new HashSet<String>() {{
+    private Set<String> operators = new HashSet<String>() {{
         add("+"); add("-"); add("*"); add("/"); add("&"); add("|"); add("<"); add(">"); add("="); add("~");
     }};
 
-    private HashMap<String, String> opFun = new HashMap<String, String>() {{ // (!) except division and multiply
+    private HashMap<String, String> operatorInOS = new HashMap<String, String>() {{ // (!) except division and multiply
         put("+", "add"); put("-", "sub"); put("&", "and"); put("|", "or"); put("<", "lt"); put(">", "gt"); put("=", "eq"); put("~", "neg");
     }};
 
-    // prepares file to be written
-    public CompilationEngine(File file, ArrayList<Token> tokenArray) throws IOException, TransformerException, ParserConfigurationException, SAXException { 
-        int indexOfDot = file.getName().lastIndexOf('.');
-        String name = file.getName().substring(0, indexOfDot);
-        vmWriter = new VMWriter(file.getParent() + "/" + name + "EngineGenerated.vm");
+    // compiles .jack files to .vm files
+    public CompilationEngine(SerializedFile serializedFile, Set<String> methodCollection) throws IOException, TransformerException, ParserConfigurationException, SAXException {
+        this.filename = serializedFile.getFilename(); 
+        this.methodCollection = methodCollection;
 
-        for (Token token : tokenArray) {
-            LexicalElement lexicalElement = new LexicalElement(token.tokenType(), token.token());
-            this.tokenArray.add(lexicalElement);
-        }
+        vmWriter = new VMWriter(serializedFile.getFile().getParent() + "/" + filename + ".vm");
+
+        this.tokenArray = serializedFile.getTokenArray();
 
         CompileClass();
 
+        // save file
         vmWriter.close();
     };
 
@@ -83,9 +96,9 @@ class CompilationEngine {
             String kind = tokenArray.get(index).token();   // static | field
             String type = tokenArray.get(index+1).token(); // type
             String name = tokenArray.get(index+2).token(); // varName
+
             classSymbolTable.put(name, type, kind);
             index += 3;
-
 
             while (tokenArray.get(index).token().equals(",")) { // (',' varName)*
                                                                 // ,
@@ -98,13 +111,12 @@ class CompilationEngine {
         }
     }
 
-
-    private void CompileSubroutineDec() throws IOException { // TODO write edge case for constructor
+    private void CompileSubroutineDec() throws IOException {
         if (tokenArray.get(index).token().equals("constructor") ||
             tokenArray.get(index).token().equals("function") ||
             tokenArray.get(index).token().equals("method")) 
         {
-            subroutineSymbolTable.reset();
+            subroutineSymbolTable.reset(); // new subroutineTable for each declared subroutine
             nVars = 0;
 
             subroutine = tokenArray.get(index).token();       // constructor | function | method
@@ -126,6 +138,11 @@ class CompilationEngine {
                 vmWriter.writePush(SEGMENT.ARGUMENT, 0);
                 vmWriter.writePop(SEGMENT.POINTER, 0); // THIS = argument 0 (for methods)
             }
+            else if (subroutine.equals("constructor")) {
+                vmWriter.writePush(SEGMENT.CONSTANT, classSymbolTable.size());
+                vmWriter.writeCall("Memory.alloc", 1);
+                vmWriter.writePop(SEGMENT.POINTER, 0); // return this object
+            }
 
             compileStatements();
                         // }
@@ -140,9 +157,9 @@ class CompilationEngine {
             String name = tokenArray.get(index+1).token(); // varName
 
             if (subroutine.equals("method")) {
-                subroutineSymbolTable.put("this", type, "ARGUMENT"); // THIS = argument 0 (for methods)
+                subroutineSymbolTable.put("this", type, "argument"); // THIS = argument 0 (for methods)
             }
-            subroutineSymbolTable.put(name, type, "ARGUMENT");
+            subroutineSymbolTable.put(name, type, "argument"); // record argument 1
 
             index += 2;
         }
@@ -153,7 +170,7 @@ class CompilationEngine {
             String type = tokenArray.get(index).token();   // type
             String name = tokenArray.get(index+1).token(); // varName
             
-            subroutineSymbolTable.put(name, type, "ARGUMENT");
+            subroutineSymbolTable.put(name, type, "argument"); // record argument n
 
             index += 2;
         }
@@ -161,10 +178,14 @@ class CompilationEngine {
 
 
     private void compileVarDec() {
+        if (subroutine.equals("method")) {
+            subroutineSymbolTable.put("this", className, "argument");
+        }
+
         while (tokenArray.get(index).token().equals("var")) {    
             String kind = tokenArray.get(index).token();   // var
             if (kind.equals("var")) {
-                kind = "LOCAL";
+                kind = "local";
             }
             String type = tokenArray.get(index+1).token(); // type    
             String name = tokenArray.get(index+2).token(); // varName 
@@ -176,7 +197,7 @@ class CompilationEngine {
                 if (!tokenArray.get(index).token().equals(",")) {
                     break;
                 }
-                            // ,
+                                                        // ,
                 name = tokenArray.get(index+1).token(); // varName 
                 subroutineSymbolTable.put(name, type, kind);
                 index += 2;
@@ -342,15 +363,19 @@ class CompilationEngine {
                     // return
         index += 1;
 
-        if (!tokenArray.get(index).token().equals(";")) {
+        if (!tokenArray.get(index).token().equals(";") && !subroutine.equals("constructor")) {
             compileExpression();
         }
-                    // ;
         if (subroutineType.equals("void")) {
-            // vmWriter.writePop(SEGMENT.TEMP, 0);
             vmWriter.writePush(SEGMENT.CONSTANT, 0);
         }
+        else if (subroutine.equals("constructor")) {
+            vmWriter.writePush(SEGMENT.POINTER, 0); // return this
+                        // this
+            index += 1;
+        }
         vmWriter.writeReturn();
+                    // ;
         index += 1;
     }
 
@@ -361,25 +386,26 @@ class CompilationEngine {
         compileTerm();  // write values in order
                         // add operands to stack
 
-        Integer n = nOperatorsToPop.pollLast(); // pop n number of operands from operands stack
+        Integer n = nOperatorsToPop.pollLast(); // pop n operators from operands stack
+                                                // n - number of operators in current subexpression
 
-        while (n > 0) {
-            String operator = opStack.pollLast();
+        while (n > 0) { // write n operators in reversed order
+            String operator = operatorStack.pollLast();
 
-            if (opFun.containsKey(operator)) {
-                vmWriter.writeArithmetic(opFun.get(operator));
-            }
-            else if (operator.equals("*")) {
-                vmWriter.writeCall("Math.multiply", 2);
-            }
-            else if (operator.equals("/")) {
-                vmWriter.writeCall("Math.divide", 2);
-            }
+            if (operatorInOS.containsKey(operator)) {                 // convert jack operator to OS function
+                vmWriter.writeArithmetic(operatorInOS.get(operator)); //
+            }                                                         //
+            else if (operator.equals("*")) {                          //
+                vmWriter.writeCall("Math.multiply", 2);               //
+            }                                                         //
+            else if (operator.equals("/")) {                          //
+                vmWriter.writeCall("Math.divide", 2);                 //
+            }                                                         //
             n--;
         }
     }
 
-    private void compileTerm() throws IOException { // TODO handle keyword "this"
+    private void compileTerm() throws IOException {
         if (tokenArray.get(index).tokenType().equals("stringConstant")) {
             index += 1;
         }
@@ -387,6 +413,10 @@ class CompilationEngine {
                 vmWriter.writePush(SEGMENT.CONSTANT, Integer.parseInt(tokenArray.get(index).token()));
                 index += 1;
                 compileTerm(); // continue expression
+        }
+        else if (tokenArray.get(index).token().equals("this")) {
+            vmWriter.writePush(SEGMENT.POINTER, 0);
+            index += 1;
         }
         else if (tokenArray.get(index).token().equals("true")) {
             vmWriter.writePush(SEGMENT.CONSTANT, 1);
@@ -416,18 +446,10 @@ class CompilationEngine {
                         // )
             index += 1;
 
-            if (opFun.containsKey(tokenArray.get(index).token())) {
+            if (operatorInOS.containsKey(tokenArray.get(index).token())) {
                 compileTerm();
             }
         }
-        // else if (op.contains(tokenArray.get(index).token())) { // shades other operations
-        //                                                        // generating wrong result
-
-        //                 // unaryOp           // TODO can't handle unaryOp now
-        //     index += 1;
-
-        //     compileTerm();
-        // }
         else if (tokenArray.get(index).tokenType().equals("identifier")) {
             if (tokenArray.get(index+1).token().equals("[")) {
 
@@ -442,6 +464,16 @@ class CompilationEngine {
             }
             else if (tokenArray.get(index+1).token().equals(".")) {
                 String objectName = tokenArray.get(index).token();       // className | varName
+
+                if (!subroutineSymbolTable.kindOf(objectName).equals(VARIABLE_IDENTIFIER.NONE)) {
+                    pushVariable(objectName);
+                    objectName = subroutineSymbolTable.typeOf(objectName);
+                }
+                else if (!classSymbolTable.kindOf(objectName).equals(VARIABLE_IDENTIFIER.NONE)) {
+                    pushVariable(objectName);
+                    objectName = classSymbolTable.typeOf(objectName);
+                }
+
                                                                          // .
                 String subroutineName = tokenArray.get(index+2).token(); // subroutineName
 
@@ -453,17 +485,31 @@ class CompilationEngine {
                                                             // )
                 index += 1;
 
+                boolean isMethod = methodCollection.contains(objectName + "." + subroutineName);
+
+                if (nExpr == 0 && isMethod) { // if called method has 0 expressions
+                    nExpr = 1;                // take in account argument 0
+                }
                 vmWriter.writeCall(objectName + "." + subroutineName, nExpr);
             }
             else if (tokenArray.get(index+1).token().equals("(")) {
-                            // subroutineName
-                            // (
+                vmWriter.writePush(SEGMENT.POINTER, 0); // this
+
+                String subroutineName = tokenArray.get(index).token(); // subroutineName
+                                                                       // (
                 index += 2;
 
                 compileExpressionList();
                 
-                            // )
+                                                                       // )
                 index += 1;
+
+                boolean isMethod = methodCollection.contains(filename + "." + subroutineName);
+                
+                if (nExpr == 0 && isMethod) { // if called method has 0 expressions
+                    nExpr = 1;                // take in account argument 0
+                }
+                vmWriter.writeCall(className + "." + subroutineName, nExpr);
             }
             else {
                             // varName
@@ -479,6 +525,7 @@ class CompilationEngine {
             vmWriter.writeArithmetic("not");
         }
         else if (tokenArray.get(index).token().equals("-") &&
+                 !tokenArray.get(index-1).token().equals(")") &&
                  !tokenArray.get(index-1).tokenType().equals("integerConstant") &&
                  !tokenArray.get(index-1).tokenType().equals("identifier"))
         {
@@ -486,9 +533,9 @@ class CompilationEngine {
             compileExpression();
             vmWriter.writeArithmetic("neg");
         } 
-        else if (op.contains(tokenArray.get(index).token())) {
-                        // op
-            opStack.add(tokenArray.get(index).token());
+        else if (operators.contains(tokenArray.get(index).token())) {
+                        // operators
+            operatorStack.add(tokenArray.get(index).token());
 
             // update number of operands to pop in current scope
             Integer n = nOperatorsToPop.pollLast();
@@ -511,20 +558,22 @@ class CompilationEngine {
             }
         }
     }
-
+    
+    // pushes declared variable onto .vm stack
     private void pushVariable(String varName) throws IOException {
         VARIABLE_IDENTIFIER variableIdentifier;
+        Integer indexOnRam;
 
         if (!subroutineSymbolTable.kindOf(varName).equals(VARIABLE_IDENTIFIER.NONE)) {
             variableIdentifier = subroutineSymbolTable.kindOf(varName);
+            indexOnRam = subroutineSymbolTable.indexOf(varName);
         }
         else {
             variableIdentifier = classSymbolTable.kindOf(varName);
+            indexOnRam = classSymbolTable.indexOf(varName);
         }
 
-        Integer indexOnRam = subroutineSymbolTable.indexOf(varName);
-
-        if (variableIdentifier == VARIABLE_IDENTIFIER.FIELD) {
+        if (variableIdentifier.equals(VARIABLE_IDENTIFIER.FIELD)) {
             vmWriter.writePush(SEGMENT.THIS, indexOnRam);
         }
         else {
@@ -533,19 +582,21 @@ class CompilationEngine {
         }
     }
 
+    // pops declared variable onto .vm stack
     private void popVariable(String varName) throws IOException {
         VARIABLE_IDENTIFIER variableIdentifier;
+        Integer indexOnRam;
 
         if (!subroutineSymbolTable.kindOf(varName).equals(VARIABLE_IDENTIFIER.NONE)) {
             variableIdentifier = subroutineSymbolTable.kindOf(varName);
+            indexOnRam = subroutineSymbolTable.indexOf(varName);
         }
         else {
             variableIdentifier = classSymbolTable.kindOf(varName);
+            indexOnRam = classSymbolTable.indexOf(varName);
         }
 
-        Integer indexOnRam = subroutineSymbolTable.indexOf(varName);
-
-        if (variableIdentifier == VARIABLE_IDENTIFIER.FIELD) {
+        if (variableIdentifier.equals(VARIABLE_IDENTIFIER.FIELD)) {
             vmWriter.writePop(SEGMENT.THIS, indexOnRam);
         }
         else {

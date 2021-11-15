@@ -12,20 +12,20 @@ public class SymbolTable {
     }
 
     public void put(String name, String type, String kind) {
-        VARIABLE_IDENTIFIER convertedKind = VARIABLE_IDENTIFIER.valueOf(kind);
+        VARIABLE_IDENTIFIER convertedKind = VARIABLE_IDENTIFIER.valueOf(kind.toUpperCase());
         
-        Integer index = varCount(convertedKind);
+        Integer symbolTableIndex = varCount(convertedKind);
 
         if (kindLastIndex.containsKey(convertedKind)) {
-            index = kindLastIndex.get(convertedKind)+1;
+            symbolTableIndex = kindLastIndex.get(convertedKind)+1;
             kindLastIndex.put(convertedKind, kindLastIndex.get(convertedKind) + 1);
         }
         else {
             kindLastIndex.put(convertedKind, 0);
-            index = 0;
+            symbolTableIndex = 0;
         }
 
-        IdentifierInfo identifierInfo = new IdentifierInfo(name, type, convertedKind, index);
+        IdentifierInfo identifierInfo = new IdentifierInfo(name, type, convertedKind, symbolTableIndex);
 
         symbolTable.put(name, identifierInfo);
     }
@@ -53,6 +53,10 @@ public class SymbolTable {
     }
 
     public Integer indexOf(String name) {
-        return symbolTable.get(name).index;
+        return symbolTable.get(name).symbolTableIndex;
+    }
+
+    public Integer size() {
+        return symbolTable.size();
     }
 }
