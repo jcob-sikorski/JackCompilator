@@ -20,7 +20,7 @@ public class JackAnalyzer {
     private static ArrayList<SerializedFile> serializedFiles = new ArrayList<SerializedFile>();
 
     public static void main(String... args) throws Exception, IOException {
-        Path dir = Paths.get("/Users/jakubsiekiera/Desktop/nand2tetris/projects/11/Square");
+        Path dir = Paths.get("/Users/jakubsiekiera/Desktop/nand2tetris/projects/11/Average");
 
         // parse each file and serialize it to tokenArray
         Files.walk(dir).forEach(path -> {

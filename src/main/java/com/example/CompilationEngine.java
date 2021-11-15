@@ -13,7 +13,7 @@ import javax.xml.transform.TransformerException;
 import org.xml.sax.SAXException;
 
 
-class CompilationEngine {
+class CompilationEngine { // TODO handle arrays and strings
     String filename;
 
     private ArrayList<LexicalElement> tokenArray = new ArrayList<LexicalElement>();
@@ -252,13 +252,19 @@ class CompilationEngine {
         String varName = tokenArray.get(index+1).token(); // varName
         index += 2;
 
+        boolean array = false;
         if (tokenArray.get(index).token().equals("[")) {
-                        // [
-            index += 1;
+                pushVariable(varName);
+                            // [
+                index += 1;
 
-            compileExpression();
-                        // ]
-            index += 1;
+                compileExpression();
+
+                vmWriter.writeArithmetic("add"); // push target address
+                            // ]
+                index += 1;
+
+                array = true;
         }
                     // =
         index += 1;
@@ -267,7 +273,15 @@ class CompilationEngine {
                     // ;
         index += 1;
 
-        popVariable(varName);
+        if (array == false) {
+            popVariable(varName);
+        }
+        else {
+            vmWriter.writePop(SEGMENT.TEMP, 0); // save value of computed expression
+            vmWriter.writePop(SEGMENT.POINTER, 1); // store target address in THAT pointer (RAM[4])
+            vmWriter.writePush(SEGMENT.TEMP, 0); // push value of computed expression
+            vmWriter.writePop(SEGMENT.THAT, 0); // save it onto target address
+        }
     }
 
 
@@ -404,9 +418,19 @@ class CompilationEngine {
             n--;
         }
     }
-
     private void compileTerm() throws IOException {
         if (tokenArray.get(index).tokenType().equals("stringConstant")) {
+            String token = tokenArray.get(index).token();
+
+            Integer length = token.length();
+            vmWriter.writePush(SEGMENT.CONSTANT, length);
+
+            vmWriter.writeCall("String.new", 1);
+
+            for (Integer ASCII_VALUE : token.codePoints().toArray()) {
+                vmWriter.writePush(SEGMENT.CONSTANT, ASCII_VALUE);
+                vmWriter.writeCall("String.appendChar", 2);
+            }
             index += 1;
         }
         else if (tokenArray.get(index).tokenType().equals("integerConstant")) {
@@ -450,17 +474,35 @@ class CompilationEngine {
                 compileTerm();
             }
         }
+        // *(arr+i) - memory address arr+i
+
+        // let x = arr[i];
+        // push arr
+        // push i
+        // add
+        // pop temp 0
+        // 
+        // pop pointer 1 - pop to that
+        //
+        // push that 0
+        // pop x
         else if (tokenArray.get(index).tokenType().equals("identifier")) {
             if (tokenArray.get(index+1).token().equals("[")) {
 
                             // varName
+                pushVariable(tokenArray.get(index).token());
                             // [
                 index += 2;
 
                 compileExpression();
 
+                vmWriter.writeArithmetic("add"); // push target address
+
                             // ]
                 index += 1;
+
+                vmWriter.writePop(SEGMENT.POINTER, 1); // store target address in THAT pointer (RAM[4])
+                vmWriter.writePush(SEGMENT.THAT, 0); // push value from target address
             }
             else if (tokenArray.get(index+1).token().equals(".")) {
                 String objectName = tokenArray.get(index).token();       // className | varName
