@@ -262,7 +262,6 @@ class CompilationEngine {
 
         boolean array = false;
 
-        System.out.println("className " + className + " varName " + varName);
         if (tokenArray.get(index).token().equals("[")) {
                 pushVariable(varName);
                             // [
@@ -287,10 +286,10 @@ class CompilationEngine {
             popVariable(varName);
         }
         else {
-            vmWriter.writePop(SEGMENT.TEMP, 0); // save value of computed expression
+            vmWriter.writePop(SEGMENT.TEMP, 0);    // save value of computed expression
             vmWriter.writePop(SEGMENT.POINTER, 1); // store target address in THAT pointer (RAM[4])
-            vmWriter.writePush(SEGMENT.TEMP, 0); // push value of computed expression
-            vmWriter.writePop(SEGMENT.THAT, 0); // save it onto target address
+            vmWriter.writePush(SEGMENT.TEMP, 0);   // push value of computed expression
+            vmWriter.writePop(SEGMENT.THAT, 0);    // save it onto target address
         }
     }
 
@@ -502,6 +501,10 @@ class CompilationEngine {
 
                 vmWriter.writePop(SEGMENT.POINTER, 1); // store target address in THAT pointer (RAM[4])
                 vmWriter.writePush(SEGMENT.THAT, 0); // push value from target address
+
+                if (operators.contains(tokenArray.get(index).token())) {
+                    compileTerm();
+                }
             }
             else if (tokenArray.get(index+1).token().equals(".")) {
                 String objectName = tokenArray.get(index).token();       // className | varName
