@@ -13,7 +13,7 @@ import javax.xml.transform.TransformerException;
 import org.xml.sax.SAXException;
 
 
-class CompilationEngine { // TODO handle arrays and strings
+class CompilationEngine {
     String filename;
 
     private ArrayList<LexicalElement> tokenArray = new ArrayList<LexicalElement>();
@@ -88,6 +88,14 @@ class CompilationEngine { // TODO handle arrays and strings
         index += 1;
     }
 
+    // Jack features four kinds of variables. 
+    //     Static variables are defined at the class level and can be accessed by all the class subroutines.    // TODO static vars can be accessed by all the class subroutines.
+    //     Field variables, also defined at the class level, are used to represent the properties of individual // TODO Field variables can be accessed by all the class constructors and methods. 
+    // objects and can be accessed by all the class constructors and methods. 
+    //     Local variables are used by subroutines for local computations, and 
+    //     parameter variables represent the arguments that were passed to the subroutine by the caller. 
+    // Local and parameter values are created just before the subroutine starts executing and are 
+    // recycled when the subroutine returns. 
 
     private void CompileClassVarDec() {
         while (tokenArray.get(index).token().equals("static") || 
@@ -253,6 +261,8 @@ class CompilationEngine { // TODO handle arrays and strings
         index += 2;
 
         boolean array = false;
+
+        System.out.println("className " + className + " varName " + varName);
         if (tokenArray.get(index).token().equals("[")) {
                 pushVariable(varName);
                             // [
@@ -418,6 +428,7 @@ class CompilationEngine { // TODO handle arrays and strings
             n--;
         }
     }
+
     private void compileTerm() throws IOException {
         if (tokenArray.get(index).tokenType().equals("stringConstant")) {
             String token = tokenArray.get(index).token();
@@ -470,22 +481,10 @@ class CompilationEngine { // TODO handle arrays and strings
                         // )
             index += 1;
 
-            if (operatorInOS.containsKey(tokenArray.get(index).token())) {
+            if (operators.contains(tokenArray.get(index).token())) {
                 compileTerm();
             }
         }
-        // *(arr+i) - memory address arr+i
-
-        // let x = arr[i];
-        // push arr
-        // push i
-        // add
-        // pop temp 0
-        // 
-        // pop pointer 1 - pop to that
-        //
-        // push that 0
-        // pop x
         else if (tokenArray.get(index).tokenType().equals("identifier")) {
             if (tokenArray.get(index+1).token().equals("[")) {
 
@@ -529,8 +528,8 @@ class CompilationEngine { // TODO handle arrays and strings
 
                 boolean isMethod = methodCollection.contains(objectName + "." + subroutineName);
 
-                if (nExpr == 0 && isMethod) { // if called method has 0 expressions
-                    nExpr = 1;                // take in account argument 0
+                if (isMethod) { // if called method has 0 expressions
+                    nExpr++;                // take in account argument 0
                 }
                 vmWriter.writeCall(objectName + "." + subroutineName, nExpr);
             }
@@ -548,8 +547,8 @@ class CompilationEngine { // TODO handle arrays and strings
 
                 boolean isMethod = methodCollection.contains(filename + "." + subroutineName);
                 
-                if (nExpr == 0 && isMethod) { // if called method has 0 expressions
-                    nExpr = 1;                // take in account argument 0
+                if (isMethod) { // if called method has 0 expressions
+                    nExpr++;                // take in account argument 0
                 }
                 vmWriter.writeCall(className + "." + subroutineName, nExpr);
             }

@@ -58,14 +58,14 @@ class Test { // Compares two files.
         Node expNode = expNodes.item(i);
 
         String prodNodeName = prodNode.getNodeName();
-        String expNodeName = expNode.getNodeName();
+        String expNodeName = expNode.getNodeName(); // DEBUG
 
         if (rabbitHole.contains(prodNodeName) && rabbitHole.contains(prodNodeName)) { // check if node has body
           compareNodesList(prodNode.getChildNodes(), expNode.getChildNodes(), 0);     // inspect body of node
         }
         else {
-          String prodNodeTextContent = prodNode.getTextContent();
-          String expNodeTextContent = expNode.getTextContent().trim();
+          String prodNodeTextContent = prodNode.getTextContent();      // DEBUG
+          String expNodeTextContent = expNode.getTextContent().trim(); // DEBUG 
   
           if (prodNode.getNodeName().equals(expNode.getNodeName()) &&                     // if nodes are the same
               prodNode.getTextContent().trim().equals(expNode.getTextContent().trim())) { // print info about them
