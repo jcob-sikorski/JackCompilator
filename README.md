@@ -12,7 +12,7 @@ Code Generation
 The Syntax Analyzer breaks down Jack source code into its constituent grammatical elements, generating an abstract syntax tree. The Code Generation stage then traverses this syntax tree, outputting corresponding VM code.
 
 ## Usage
-1. Clone this repository: `git clone https://github.com/your-username/Jack-Compiler.git`
+1. Clone this repository: `[git clone https://github.com/your-username/Jack-Compiler.git](https://github.com/jcob-sikorski/JackCompilator)`
 2. Navigate to the directory containing the source Jack files: `cd /path-to-your-jack-files`
 3. Run the Jack Compiler.
 4. This will generate .vm files for each .jack file in the directory.
